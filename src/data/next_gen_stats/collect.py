@@ -30,6 +30,7 @@ def get_ngs_data(years, stat_type):
             'rush_yards',  # Week 0 is total rush yards for the season while other weeks are per week
             'rush_attempts',  # Week 0 is total rush attempts for the season while other weeks are per week
         ]
+        # TODO: Subtract the current season average instead of the season total average to prevent data leakage
         if col_to_get_diff and not col.endswith('_season') and col not in cols_not_helpful_diff:
             ngs_passing_df[col + '_diff'] = ngs_passing_df[col] - ngs_passing_df[col + '_season']
     season_cols_to_drop = [col for col in ngs_passing_df.columns if col.endswith('_season')]
