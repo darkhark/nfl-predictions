@@ -1,7 +1,7 @@
 import nfl_data_py as nfl
 import pandas as pd
 
-# There are times where passing yards != receiving yards, but it's rare so we'll ignore receiving yards
+# There are times when passing yards != receiving yards, but it's rare so we'll ignore receiving yards
 # and tds since they are duplicated in the passing stats
 ONLY_NON_IDENTIFIER_COLUMNS = [
     'recent_team', 'season', 'week',
@@ -21,6 +21,8 @@ OPPONENT_TEAM_COL = 'opponent_team'
 SEASON_COL = 'season'
 WEEK_COL = 'week'
 SEASON_TYPE_COL = 'season_type'
+TEAM_GAME_COUNT_COL = 'team_game_count'
+OPP_GAME_COUNT_COL = 'opp_game_count'
 
 
 def get_weekly_data(years):
@@ -39,13 +41,18 @@ def get_weekly_data(years):
     for year in years:
         df = nfl.import_weekly_data(years=[year], columns=ONLY_NON_IDENTIFIER_COLUMNS)
         df.rename(columns={'recent_team': TEAM_COL}, inplace=True)
-        # Drop all records where the team and opposing team are the same (Not sure why this happens)
-        df = df[df[TEAM_COL] != df[OPPONENT_TEAM_COL]]
+        # Remove all week 0 records and records where the team and opponent team are the same
+        df = df[(df[WEEK_COL] != 0) & (df[TEAM_COL] != df[OPPONENT_TEAM_COL])]
         # Collect the statistics in broad terms of passing yards, rushing yards, etc. by team
         # This reduces the memory footprint of the data while still allowing for analysis
         df = df.groupby(
             [TEAM_COL, SEASON_COL, WEEK_COL, SEASON_TYPE_COL, OPPONENT_TEAM_COL]
         ).sum().reset_index()
+        df.sort_values(by=[TEAM_COL, SEASON_COL, WEEK_COL], inplace=True)
+        # Add a game count column to the dataframe since week is not always a good indicator of games played
+        df[TEAM_GAME_COUNT_COL] = df.groupby([TEAM_COL, SEASON_COL]).cumcount() + 1
+        df.sort_values(by=[OPPONENT_TEAM_COL, SEASON_COL, WEEK_COL], inplace=True)
+        df[OPP_GAME_COUNT_COL] = df.groupby([OPPONENT_TEAM_COL, SEASON_COL]).cumcount() + 1
 
         df = create_team_offense_columns(df)
         df = create_opponent_defensive_columns(df)
@@ -56,11 +63,11 @@ def get_weekly_data(years):
             weekly_df = df
         else:
             weekly_df = weekly_df.concat(df)
-    weekly_df.sort_values(by=[TEAM_COL, SEASON_COL, WEEK_COL], inplace=True)
+    weekly_df.sort_values(by=[TEAM_COL, SEASON_COL, TEAM_GAME_COUNT_COL], inplace=True)
     return weekly_df
 
 
-def create_cumulative_columns(df, groupby_columns, column_prefix, swap_team_and_opponent=False):
+def create_cumulative_columns(df, groupby_columns, column_prefix, game_count_col, swap_team_and_opponent=False):
     """
     Create cumulative columns for the specified columns in the dataframe. The cumulative columns are
     the sum of the specified columns for the groupby_columns. The cumulative average is the cumulative
@@ -72,10 +79,13 @@ def create_cumulative_columns(df, groupby_columns, column_prefix, swap_team_and_
     :param column_prefix: The prefix to add to the new columns, e.g. 'off' or 'def_opp'
     :return: The dataframe with the new columns
     """
+    df = df.sort_values(by=groupby_columns + [game_count_col])
+    # divisor_col = TEAM_GAME_COUNT_COL if TEAM_GAME_COUNT_COL in groupby_columns else OPP_GAME_COUNT_COL
     new_df = pd.DataFrame()
     for column in ONLY_NON_IDENTIFIER_COLUMNS[5:]:
         new_df[f'{column_prefix}_{column}_cumulative_sum'] = df.groupby(groupby_columns)[column].cumsum()
-        new_df[f'{column_prefix}_{column}_cumulative_average'] = new_df[f'{column_prefix}_{column}_cumulative_sum'] / df[WEEK_COL]
+        # Need to use game count instead of week because bye weeks are not counted
+        new_df[f'{column_prefix}_{column}_cumulative_average'] = new_df[f'{column_prefix}_{column}_cumulative_sum'] / df[game_count_col]
         new_df.drop(columns=[f'{column_prefix}_{column}_cumulative_sum'], inplace=True)
         new_df[f'{column_prefix}_{column}_cumulative_average_change'] = new_df[f'{column_prefix}_{column}_cumulative_average'].diff()
         new_df.fillna({f'{column_prefix}_{column}_cumulative_average_change': 0}, inplace=True)
@@ -96,7 +106,8 @@ def create_team_offense_columns(df):
     return create_cumulative_columns(
         df,
         [TEAM_COL, SEASON_COL],
-        'off'
+        'off',
+        TEAM_GAME_COUNT_COL
     )
 
 # TODO: Fix the below functions
@@ -138,5 +149,6 @@ def create_opponent_defensive_columns(df):
     return create_cumulative_columns(
         df,
         [OPPONENT_TEAM_COL, SEASON_COL],
-        'def_opp'
+        'def_opp',
+        OPP_GAME_COUNT_COL,
     )
