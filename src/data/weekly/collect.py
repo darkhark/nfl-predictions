@@ -62,7 +62,7 @@ def get_weekly_data(years):
         if weekly_df is None:
             weekly_df = df
         else:
-            weekly_df = weekly_df.concat(df)
+            weekly_df = pd.concat([weekly_df, df], ignore_index=True).reset_index(drop=True)
     weekly_df.sort_values(by=[TEAM_COL, SEASON_COL, TEAM_GAME_COUNT_COL], inplace=True)
     return weekly_df
 
@@ -77,6 +77,8 @@ def create_cumulative_columns(df, groupby_columns, column_prefix, game_count_col
     :param df: The dataframe to create the columns for
     :param groupby_columns: The columns to group by
     :param column_prefix: The prefix to add to the new columns, e.g. 'off' or 'def_opp'
+    :param game_count_col: The column to use for the game count
+    :param swap_team_and_opponent: Whether to swap the team and opponent columns
     :return: The dataframe with the new columns
     """
     df = df.sort_values(by=groupby_columns + [game_count_col])
