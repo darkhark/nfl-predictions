@@ -56,9 +56,6 @@ def get_weekly_data(years):
 
         df = create_team_offense_columns(df)
         df = create_opponent_defensive_columns(df)
-        # TODO: Fix the below functions
-        # df = create_opponent_offensive_columns(df)
-        # df = create_defensive_team_columns(df)
         if weekly_df is None:
             weekly_df = df
         else:
@@ -111,35 +108,6 @@ def create_team_offense_columns(df):
         'off',
         TEAM_GAME_COUNT_COL
     )
-
-# TODO: Fix the below functions
-
-# def create_opponent_offensive_columns(df):
-#     """
-#     Create cumulative columns for the team's opponent's offense.
-#     :param df: The dataframe to create the columns for
-#     :return: The dataframe with the new columns
-#     """
-#     return create_cumulative_columns(
-#         df,
-#         [TEAM_COL, SEASON_COL],
-#         'off_opp',
-#         swap_team_and_opponent=True
-#     )
-#
-#
-# def create_defensive_team_columns(df):
-#     """
-#     Create cumulative columns for the team's defense.
-#     :param df: The dataframe to create the columns for
-#     :return: The dataframe with the new columns
-#     """
-#     return create_cumulative_columns(
-#         df,
-#         [OPPONENT_TEAM_COL, SEASON_COL],
-#         'def',
-#         swap_team_and_opponent=True
-#     )
 
 
 def create_opponent_defensive_columns(df):
