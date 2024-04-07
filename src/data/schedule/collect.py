@@ -41,6 +41,8 @@ def get_schedule_data(years, keep_game_id=True, keep_odds=False):
         df = nfl.import_schedules(years=[year])[cols_to_import]
         df['gameday'] = pd.to_datetime(df['gameday'], format='%Y-%m-%d')
         df = add_calculated_values(df)
+        df['indoor'] = df['roof'].apply(lambda x: 1 if x == 'dome' or 'closed' else 0)
+        df.drop(columns=['roof'], inplace=True)
         if schedule_df is None:
             schedule_df = df
         else:
@@ -86,6 +88,7 @@ def add_calculated_values(df):
     team_df['cumulative_avg_score_change'] = team_df.groupby(['team', 'season'])['cumulative_avg_score'].diff()
     # Replace the first game's cumulative average score with the first game's score
     team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, 'cumulative_avg_score'] = team_df['score']
+    team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, 'cumulative_avg_score_change'] = 0
 
     df.reset_index(drop=True, inplace=True)
     # Merge this new dataframe back into the original dataframe

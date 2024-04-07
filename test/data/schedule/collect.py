@@ -48,6 +48,38 @@ class MyTestCase(unittest.TestCase):
         lar_week_8_cumulative_score = la_rams['away_cumulative_avg_score'].values[-1]
         self.assertEqual(lar_week_8_cumulative_score, cumulative_avg_score)
 
+    def test_cumulative_score_change(self):
+        # get the score for the first 8 weeks of the LAR season
+        la_rams = self.schedule_data[
+            ((self.schedule_data['home_team'] == 'LA') | (self.schedule_data['away_team'] == 'LA')) &
+            (self.schedule_data['season'] == 2023)
+        ]
+        la_rams_week_7 = la_rams[la_rams['week'] <= 7]
+        # get the sum of the scores for the first 8 weeks when lar is home or away
+        sum_of_points_week_7 = (
+                la_rams_week_7[la_rams_week_7['home_team'] == 'LA']['home_score'].sum() +
+                la_rams_week_7[la_rams_week_7['away_team'] == 'LA']['away_score'].sum()
+        )
+        cumulative_avg_score_week_7 = sum_of_points_week_7 / 7
+        sum_of_points_week_8 = la_rams[la_rams['week'] == 8]['away_score'].values[0] + sum_of_points_week_7
+        cumulative_avg_score_week_8 = sum_of_points_week_8 / 8
+        change_in_avg_score = cumulative_avg_score_week_8 - cumulative_avg_score_week_7
+        lar_week_8_cumulative_score_change = la_rams[la_rams['week'] == 8]['away_cumulative_avg_score_change'].values[-1]
+        self.assertEqual(lar_week_8_cumulative_score_change, change_in_avg_score)
+
+    def test_cumulative_score_change_first_game(self):
+        la_rams = self.schedule_data[
+            ((self.schedule_data['home_team'] == 'LA') | (self.schedule_data['away_team'] == 'LA')) &
+            (self.schedule_data['season'] == 2023)
+        ]
+        la_rams_week_1 = la_rams[la_rams['week'] == 1]
+        lar_week_1_cumulative_score_change = la_rams_week_1['away_cumulative_avg_score_change'].values[0]
+        self.assertEqual(lar_week_1_cumulative_score_change, 0)
+
+    def test_indoor_is_accurate(self):
+        la_rams = self.schedule_data[self.schedule_data['home_team'] == 'LA']
+        self.assertTrue(la_rams['indoor'].all())
+
 
 if __name__ == '__main__':
     unittest.main()
