@@ -1,7 +1,6 @@
 import nfl_data_py as nfl
 import pandas as pd
 
-# TODO: outdoors
 # 'surface': ~12% null so not including for now
 # 'temp' and 'wind': ~45% null so not including for now
 COLS_TO_KEEP = [
