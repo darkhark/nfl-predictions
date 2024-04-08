@@ -42,9 +42,9 @@ class TestCollect(unittest.TestCase):
         ]['passing_yards'].values[0]
         opponent = self.weekly_data[
             (self.weekly_data['team'] == 'ARI') & (self.weekly_data['week'] == 1)
-        ]['opponent_team'].values[0]
+        ]['opp_team'].values[0]
         def_opp_passing_yards_cumulative_avg = self.weekly_data[
-            (self.weekly_data['opponent_team'] == opponent) & (self.weekly_data['week'] == 1)
+            (self.weekly_data['opp_team'] == opponent) & (self.weekly_data['week'] == 1)
             ]['def_opp_passing_yards_cumulative_average'].values[0]
         self.assertEqual(passing_yards, def_opp_passing_yards_cumulative_avg)
 
@@ -55,7 +55,7 @@ class TestCollect(unittest.TestCase):
             try:
                 print("Week ", week)
                 passing_yards_given = self.weekly_data[
-                    (self.weekly_data['week'] == week) & (self.weekly_data['opponent_team'] == 'LA')
+                    (self.weekly_data['week'] == week) & (self.weekly_data['opp_team'] == 'LA')
                 ]['passing_yards'].values[0]
                 cumulative_passing_yards_given_sum += passing_yards_given
                 if week < bye_week:
@@ -63,7 +63,7 @@ class TestCollect(unittest.TestCase):
                 elif week > bye_week:
                     actual_cumulative_passing_yards_average = cumulative_passing_yards_given_sum / (week - 1)
                 df_cumulative_passing_yards = self.weekly_data[
-                    (self.weekly_data['week'] == week) & (self.weekly_data['opponent_team'] == 'LA')
+                    (self.weekly_data['week'] == week) & (self.weekly_data['opp_team'] == 'LA')
                 ]['def_opp_passing_yards_cumulative_average'].values[0]
                 # actual_cumulative_passing_yards_average cannot be unassigned because the IndexError will be raised
                 # when the week is a bye week

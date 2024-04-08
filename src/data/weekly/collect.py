@@ -17,7 +17,7 @@ ONLY_NON_IDENTIFIER_COLUMNS = [
 ]
 
 TEAM_COL = 'team'
-OPPONENT_TEAM_COL = 'opponent_team'
+OPPONENT_TEAM_COL = 'opp_team'
 SEASON_COL = 'season'
 WEEK_COL = 'week'
 SEASON_TYPE_COL = 'season_type'
@@ -40,7 +40,10 @@ def get_weekly_data(years):
     weekly_df = None
     for year in years:
         df = nfl.import_weekly_data(years=[year], columns=ONLY_NON_IDENTIFIER_COLUMNS)
-        df.rename(columns={'recent_team': TEAM_COL}, inplace=True)
+        df.rename(columns={
+            'recent_team': TEAM_COL,
+            'opponent_team': OPPONENT_TEAM_COL,
+        }, inplace=True)
         # Remove all week 0 records and records where the team and opponent team are the same
         df = df[(df[WEEK_COL] != 0) & (df[TEAM_COL] != df[OPPONENT_TEAM_COL])]
         # Collect the statistics in broad terms of passing yards, rushing yards, etc. by team

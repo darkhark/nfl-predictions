@@ -41,7 +41,16 @@ def get_schedule_data(years, keep_game_id=True, keep_odds=False):
         df['gameday'] = pd.to_datetime(df['gameday'], format='%Y-%m-%d')
         df = add_calculated_values(df)
         df['indoor'] = df['roof'].apply(lambda x: 1 if x == 'dome' or 'closed' else 0)
-        df.drop(columns=['roof'], inplace=True)
+        # if the result is positive, the home team won
+        df['home_team_win'] = df['result'].apply(lambda x: 1 if x > 0 else 0)
+        df.drop(
+            columns=[
+                'roof', 'game_type', 'gameday',
+                'home_rest', 'away_rest',  # These are currently bugged or else we would keep
+                'result'
+            ],
+            inplace=True
+        )
         if schedule_df is None:
             schedule_df = df
         else:
@@ -97,6 +106,7 @@ def add_calculated_values(df):
         left_on=['gameday', 'home_team', 'season'],
         right_on=['gameday', 'team', 'season']
     )
+    df.drop(columns=['team', 'score'], inplace=True)
     df = df.rename(columns={
         'days_since_previous_game': 'home_days_since_previous_game',
         'cumulative_score': 'home_cumulative_score',
@@ -109,6 +119,7 @@ def add_calculated_values(df):
         left_on=['gameday', 'away_team', 'season'],
         right_on=['gameday', 'team', 'season']
     )
+    df.drop(columns=['team', 'score'], inplace=True)
     df = df.rename(columns={
         'days_since_previous_game': 'away_days_since_previous_game',
         'cumulative_score': 'away_cumulative_score',
