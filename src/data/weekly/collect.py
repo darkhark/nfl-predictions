@@ -24,6 +24,8 @@ SEASON_TYPE_COL = 'season_type'
 TEAM_GAME_COUNT_COL = 'team_game_count'
 OPP_GAME_COUNT_COL = 'opp_game_count'
 
+cols_to_drop = []
+
 
 def get_weekly_data(years):
     """
@@ -59,6 +61,7 @@ def get_weekly_data(years):
 
         df = create_team_offense_columns(df)
         df = create_opponent_defensive_columns(df)
+        df.drop(columns=cols_to_drop, inplace=True)
         if weekly_df is None:
             weekly_df = df
         else:
@@ -76,7 +79,7 @@ def create_cumulative_columns(df, groupby_columns, column_prefix, game_count_col
 
     :param df: The dataframe to create the columns for
     :param groupby_columns: The columns to group by
-    :param column_prefix: The prefix to add to the new columns, e.g. 'off' or 'def_opp'
+    :param column_prefix: The prefix to add to the new columns, e.g. 'off' or 'opp_def'
     :param game_count_col: The column to use for the game count
     :param swap_team_and_opponent: Whether to swap the team and opponent columns
     :return: The dataframe with the new columns
@@ -85,12 +88,14 @@ def create_cumulative_columns(df, groupby_columns, column_prefix, game_count_col
     # divisor_col = TEAM_GAME_COUNT_COL if TEAM_GAME_COUNT_COL in groupby_columns else OPP_GAME_COUNT_COL
     new_df = pd.DataFrame()
     for column in ONLY_NON_IDENTIFIER_COLUMNS[5:]:
+        new_df[f'{column_prefix}_{column}'] = df[column]
         new_df[f'{column_prefix}_{column}_cumulative_sum'] = df.groupby(groupby_columns)[column].cumsum()
         # Need to use game count instead of week because bye weeks are not counted
         new_df[f'{column_prefix}_{column}_cumulative_average'] = new_df[f'{column_prefix}_{column}_cumulative_sum'] / df[game_count_col]
         new_df.drop(columns=[f'{column_prefix}_{column}_cumulative_sum'], inplace=True)
         new_df[f'{column_prefix}_{column}_cumulative_average_change'] = new_df[f'{column_prefix}_{column}_cumulative_average'].diff()
         new_df.fillna({f'{column_prefix}_{column}_cumulative_average_change': 0}, inplace=True)
+        cols_to_drop.append(column)
     if swap_team_and_opponent:
         if TEAM_COL in groupby_columns:
             new_df[OPPONENT_TEAM_COL] = df[TEAM_COL]
