@@ -71,61 +71,8 @@ def add_calculated_values(df):
     :return: The dataframe with calculated values added
     """
     df = df.sort_values(by=['season', 'week', 'gameday'])
-
-    # Create a new dataframe that contains both the home and away games for each team
-    home_df = df[['gameday', 'home_team', 'home_score', 'season']].rename(columns={
-        'home_team': 'team',
-        'home_score': 'score'
-    })
-    away_df = df[['gameday', 'away_team', 'away_score', 'season']].rename(columns={
-        'away_team': 'team',
-        'away_score': 'score'
-    })
-    team_df = pd.concat([home_df, away_df]).reset_index(drop=True)
-
-    # Sort this new dataframe by 'team' and 'gameday'
-    team_df = team_df.sort_values(['team', 'season', 'gameday'])
-
-    # Calculate the number of days since the previous game for each team
-    team_df['days_since_previous_game'] = team_df.groupby(['team', 'season'])['gameday'].diff().dt.days
-
-    # Calculate the cumulative average score for each team, for example, the average score for the first game, the
-    # average score for the first two games, the average score for the first three games, etc.
-    team_df['cumulative_score'] = team_df.groupby(['team', 'season'])['score'].cumsum()
-    team_df['cumulative_avg_score'] = team_df['cumulative_score'] / (team_df.groupby(['team', 'season']).cumcount() + 1)
-    team_df['cumulative_avg_score_change'] = team_df.groupby(['team', 'season'])['cumulative_avg_score'].diff()
-    # Replace the first game's cumulative average score with the first game's score
-    team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, 'cumulative_avg_score'] = team_df['score']
-    team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, 'cumulative_avg_score_change'] = 0
-
-    df.reset_index(drop=True, inplace=True)
-    # Merge this new dataframe back into the original dataframe
-    df = df.merge(
-        team_df,
-        how='left',
-        left_on=['gameday', 'home_team', 'season'],
-        right_on=['gameday', 'team', 'season']
-    )
-    df.drop(columns=['team', 'score'], inplace=True)
-    df = df.rename(columns={
-        'days_since_previous_game': 'home_days_since_previous_game',
-        'cumulative_score': 'home_cumulative_score',
-        'cumulative_avg_score': 'home_cumulative_avg_score',
-        'cumulative_avg_score_change': 'home_cumulative_avg_score_change'
-    })
-    df = df.merge(
-        team_df,
-        how='left',
-        left_on=['gameday', 'away_team', 'season'],
-        right_on=['gameday', 'team', 'season']
-    )
-    df.drop(columns=['team', 'score'], inplace=True)
-    df = df.rename(columns={
-        'days_since_previous_game': 'away_days_since_previous_game',
-        'cumulative_score': 'away_cumulative_score',
-        'cumulative_avg_score': 'away_cumulative_avg_score',
-        'cumulative_avg_score_change': 'away_cumulative_avg_score_change'
-    })
+    df = _add_cumulative_columns(df)
+    df = _add_cumulative_columns(df, offense=False)
 
     # If week == 1, set the days since previous game to 8 * 30 to represent the 8 months since the last regular season
     # game
@@ -134,3 +81,72 @@ def add_calculated_values(df):
 
     return df
 
+
+def _add_cumulative_columns(df, offense=True):
+    team_df = _create_team_df(df, offense=offense)
+
+    if offense:
+        # Calculate the number of days since the previous game for each team
+        team_df['days_since_previous_game'] = team_df.groupby(['team', 'season'])['gameday'].diff().dt.days
+
+    team_df = _calculate_cumulative_avg_score(team_df, offense=offense)
+
+    df.reset_index(drop=True, inplace=True)
+    df = _merge_team_df(df, team_df, 'home')
+    return _merge_team_df(df, team_df, 'away')
+
+
+def _create_team_df(df, offense=True):
+    if offense:
+        scores = ['home_score', 'away_score']
+    else:
+        scores = ['away_score', 'home_score']
+    home_df = df[['gameday', 'home_team', scores[0], 'season']].rename(columns={
+        'home_team': 'team',
+        scores[0]: 'score'
+    })
+    away_df = df[['gameday', 'away_team', scores[1], 'season']].rename(columns={
+        'away_team': 'team',
+        scores[1]: 'score'
+    })
+    team_df = pd.concat([home_df, away_df]).reset_index(drop=True)
+    team_df = team_df.sort_values(['team', 'season', 'gameday'])
+    return team_df
+
+
+def _calculate_cumulative_avg_score(team_df, offense=True):
+    if offense:
+        points = 'score'
+    else:
+        points = 'points_allowed'
+    team_df[f'cumulative_{points}'] = team_df.groupby(['team', 'season'])['score'].cumsum()
+    team_df[f'cumulative_avg_{points}'] = team_df[f'cumulative_{points}'] / (team_df.groupby(['team', 'season']).cumcount() + 1)
+    team_df[f'cumulative_avg_{points}_change'] = team_df.groupby(['team', 'season'])[f'cumulative_avg_{points}'].diff()
+    team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, f'cumulative_avg_{points}'] = team_df['score']
+    team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, f'cumulative_avg_{points}_change'] = 0
+    return team_df
+
+
+def _merge_team_df(df, team_df, team_type, offense=True):
+    assert team_type in ['home', 'away'], "team_type must be either 'home' or 'away'"
+
+    side = 'off' if offense else 'def'
+    score = 'score' if offense else 'points_allowed'
+    df = df.merge(
+        team_df,
+        how='left',
+        left_on=['gameday', f'{team_type}_team', 'season'],
+        right_on=['gameday', 'team', 'season']
+    )
+    df.drop(columns=['team', 'score'], inplace=True)
+    cols_rename_mapping = {
+        'days_since_previous_game': f'{team_type}_days_since_previous_game',
+        f'cumulative_{score}': f'{team_type}_{side}_cumulative_{score}',
+        f'cumulative_avg_{score}': f'{team_type}_{side}_cumulative_avg_{score}',
+        f'cumulative_avg_{score}_change': f'{team_type}_{side}_cumulative_avg_{score}_change'
+    }
+    if not offense:
+        # remove the key value pair of days since previous game since it will exist for the offense which is called 1st
+        cols_rename_mapping.pop('days_since_previous_game')
+    df = df.rename(columns=cols_rename_mapping)
+    return df
