@@ -45,9 +45,8 @@ def get_schedule_data(years, keep_game_id=True, keep_odds=False):
         df['home_team_win'] = df['result'].apply(lambda x: 1 if x > 0 else 0)
         df.drop(
             columns=[
-                'roof', 'game_type', 'gameday',
+                'roof', 'game_type', 'gameday', 'result',
                 'home_rest', 'away_rest',  # These are currently bugged or else we would keep
-                'result'
             ],
             inplace=True
         )
@@ -92,8 +91,8 @@ def _add_cumulative_columns(df, offense=True):
     team_df = _calculate_cumulative_avg_score(team_df, offense=offense)
 
     df.reset_index(drop=True, inplace=True)
-    df = _merge_team_df(df, team_df, 'home')
-    return _merge_team_df(df, team_df, 'away')
+    df = _merge_team_df(df, team_df, 'home', offense=offense)
+    return _merge_team_df(df, team_df, 'away', offense=offense)
 
 
 def _create_team_df(df, offense=True):

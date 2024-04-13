@@ -9,6 +9,8 @@ HOME_DAYS_SINCE_GAME = 'home_days_since_previous_game'
 AWAY_DAYS_SINCE_GAME = 'away_days_since_previous_game'
 AWAY_OFF_CUM_AVG_SCORE = 'away_off_cumulative_avg_score'
 AWAY_OFF_CUM_AVG_SCORE_CHANGE = 'away_off_cumulative_avg_score_change'
+AWAY_DEF_CUM_AVG_SCORE = 'away_def_cumulative_avg_points_allowed'
+AWAY_DEF_CUM_AVG_SCORE_CHANGE = 'away_def_cumulative_avg_points_allowed_change'
 
 
 class MyTestCase(unittest.TestCase):
@@ -40,7 +42,7 @@ class MyTestCase(unittest.TestCase):
         ]
         self.assertEqual(week_fourteen_ari[HOME_DAYS_SINCE_GAME].values[0], 14)
 
-    def test_cumulative_score(self):
+    def test_cumulative_score_off(self):
         # get the score for the first 8 weeks of the LAR season
         la_rams = self.schedule_data[
             ((self.schedule_data[HOME_TEAM] == 'LA') | (self.schedule_data[AWAY_TEAM] == 'LA')) &
@@ -57,7 +59,7 @@ class MyTestCase(unittest.TestCase):
         lar_week_8_cumulative_score = la_rams[AWAY_OFF_CUM_AVG_SCORE].values[-1]
         self.assertEqual(lar_week_8_cumulative_score, cumulative_avg_score)
 
-    def test_cumulative_score_change(self):
+    def test_cumulative_score_change_off(self):
         # get the score for the first 8 weeks of the LAR season
         la_rams = self.schedule_data[
             ((self.schedule_data[HOME_TEAM] == 'LA') | (self.schedule_data[AWAY_TEAM] == 'LA')) &
@@ -74,6 +76,42 @@ class MyTestCase(unittest.TestCase):
         cumulative_avg_score_week_8 = sum_of_points_week_8 / 8
         change_in_avg_score = cumulative_avg_score_week_8 - cumulative_avg_score_week_7
         lar_week_8_cumulative_score_change = la_rams[la_rams[WEEK] == 8][AWAY_OFF_CUM_AVG_SCORE_CHANGE].values[-1]
+        self.assertEqual(lar_week_8_cumulative_score_change, change_in_avg_score)
+
+    def test_cumulative_score_def(self):
+        # get the score for the first 8 weeks of the LAR season
+        la_rams = self.schedule_data[
+            ((self.schedule_data[HOME_TEAM] == 'LA') | (self.schedule_data[AWAY_TEAM] == 'LA')) &
+            (self.schedule_data[SEASON] == 2023)
+        ]
+        la_rams = la_rams[la_rams[WEEK] <= 8]
+        # get the sum of the scores for the first 8 weeks when lar is home or away
+        sum_of_points = (
+                la_rams[la_rams[HOME_TEAM] != 'LA']['home_score'].sum() +
+                la_rams[la_rams[AWAY_TEAM] != 'LA']['away_score'].sum()
+        )
+        # get the cumulative score for the first 8 weeks
+        cumulative_avg_score = sum_of_points / 8
+        lar_week_8_cumulative_score = la_rams[AWAY_DEF_CUM_AVG_SCORE].values[-1]
+        self.assertEqual(lar_week_8_cumulative_score, cumulative_avg_score)
+
+    def test_cumulative_score_change_def(self):
+        # get the score for the first 8 weeks of the LAR season
+        la_rams = self.schedule_data[
+            ((self.schedule_data[HOME_TEAM] == 'LA') | (self.schedule_data[AWAY_TEAM] == 'LA')) &
+            (self.schedule_data[SEASON] == 2023)
+        ]
+        la_rams_week_7 = la_rams[la_rams[WEEK] <= 7]
+        # get the sum of the scores for the first 8 weeks when lar is home or away
+        sum_of_points_week_7 = (
+                la_rams_week_7[la_rams_week_7[HOME_TEAM] != 'LA']['home_score'].sum() +
+                la_rams_week_7[la_rams_week_7[AWAY_TEAM] != 'LA']['away_score'].sum()
+        )
+        cumulative_avg_score_week_7 = sum_of_points_week_7 / 7
+        sum_of_points_week_8 = la_rams[la_rams[WEEK] == 8]['home_score'].values[0] + sum_of_points_week_7
+        cumulative_avg_score_week_8 = sum_of_points_week_8 / 8
+        change_in_avg_score = cumulative_avg_score_week_8 - cumulative_avg_score_week_7
+        lar_week_8_cumulative_score_change = la_rams[la_rams[WEEK] == 8][AWAY_DEF_CUM_AVG_SCORE_CHANGE].values[-1]
         self.assertEqual(lar_week_8_cumulative_score_change, change_in_avg_score)
 
     def test_cumulative_score_change_first_game(self):
