@@ -45,7 +45,7 @@ def get_schedule_data(years, keep_game_id=True, keep_odds=False):
         df['home_team_win'] = df['result'].apply(lambda x: 1 if x > 0 else 0)
         df.drop(
             columns=[
-                'roof', 'game_type', 'gameday', 'result',
+                'roof', 'gameday', 'result',
                 'home_rest', 'away_rest',  # These are currently bugged or else we would keep
             ],
             inplace=True
