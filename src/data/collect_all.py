@@ -52,9 +52,6 @@ def get_schedule_and_weekly_data(years):
     combined_data = combined_data[
         [col for col in combined_data.columns if not col.endswith('_y')]
     ]
-
-    #
-
     return combined_data
 
 
@@ -65,24 +62,21 @@ def _get_home_or_away_team_in_weekly_data(schedule_data, weekly_data, is_home=Tr
     else:
         team_type = 'away'
         opp_team_type = 'home'
-    home_team_is_team = schedule_data.merge(
+    team_df = schedule_data.merge(
         weekly_data,
         left_on=[f'{team_type}_team', 'season', 'week'],
         right_on=['team', 'season', 'week'],
         how='inner'
     )
     # replace the 'team' column with 'home_team'
-    home_team_is_team.drop(columns=['team', 'opp_team'], inplace=True)
-    # in every column that contains 'opp', replace 'opp' with 'away'
-    home_team_is_team = home_team_is_team.rename(
+    team_df.drop(columns=['team', 'opp_team'], inplace=True)
+    team_df = team_df.rename(
         columns=lambda x: x.replace('opp', opp_team_type) if 'opp' in x else x
     )
-    # in every column that contains 'off', replace 'off' with 'home'
-    home_team_is_team = home_team_is_team.rename(
-        columns=lambda x: x.replace('off', f'off_{team_type}') if 'off' in x else x
+    team_df = team_df.rename(
+        columns=lambda x: x.replace('off', f'off_{team_type}') if x.startswith('off') else x
     )
-    # in every column that starts with 'team_', replace 'team_' with 'home_'
-    return home_team_is_team.rename(
-        columns=lambda x: x.replace('team_', f'{team_type}_') if 'team_' in x else x
+    team_df = team_df.rename(
+        columns=lambda x: x.replace('team_', f'{team_type}_') if x.startswith('team_') else x
     )
-
+    return team_df
