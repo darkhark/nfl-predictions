@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch, MagicMock
 from src.data.weekly import collect
 
 TEAM = 'team'
