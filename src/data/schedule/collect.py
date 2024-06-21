@@ -42,7 +42,7 @@ def get_schedule_data(years, keep_game_id=True, keep_odds=False):
         df = add_calculated_values(df)
         df['indoor'] = df['roof'].apply(lambda x: 1 if x == 'dome' or 'closed' else 0)
         # if the result is positive, the home team won
-        df['home_team_win'] = df['result'].apply(lambda x: 1 if x > 0 else 0)
+        df['h_win'] = df['result'].apply(lambda x: 1 if x > 0 else 0)
         df.drop(
             columns=[
                 'roof', 'gameday', 'result',
