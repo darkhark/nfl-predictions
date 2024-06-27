@@ -15,7 +15,7 @@ ODDS_COLS = [
 ]
 
 # If a team moved cities, the name in the weekly data will be the most recent name
-# For a sooth merge with the weekly data, the team names in the schedule data need to be updated
+# For a smooth merge with the weekly data, the team names in the schedule data need to be updated
 # The key will be the team name in the schedule data and the value will be the team name in the weekly data
 TEAM_ABBR_MAPPINGS = {
     'STL': 'LA',

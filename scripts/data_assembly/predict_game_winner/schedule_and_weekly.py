@@ -20,7 +20,7 @@ schedule_and_weekly_df.head()
 # %%
 TARGET = 'target_win'
 EXCLUDE_COLUMNS_LIST = [
-    'game_id', 'opp_team', 'opp_score', 'target_team', 'target_score',
+    'game_id', 'opp_team', 'opp_score', 'target_team', 'target_score', 'season_type',
     'h_win'
 ]
 MODEL_FEATURES_LIST = [
@@ -28,7 +28,7 @@ MODEL_FEATURES_LIST = [
 ]
 
 # %%
-# Remove all records where week == 1 and season == 1999
+# Remove all records where week == 1 and season == 2003
 # This is because there are no previous games to calculate all the stats
 schedule_and_weekly_df = schedule_and_weekly_df[
     (schedule_and_weekly_df['week'] != 1) | (schedule_and_weekly_df['season'] != 2003)
