@@ -23,9 +23,6 @@ EXCLUDE_COLUMNS_LIST = [
     'game_id', 'opp_team', 'opp_score', 'target_team', 'target_score', 'season_type',
     'h_win'
 ]
-MODEL_FEATURES_LIST = [
-    col for col in schedule_and_weekly_df.columns if col not in EXCLUDE_COLUMNS_LIST
-]
 
 # %%
 # Remove all records where week == 1 and season == 2003
@@ -38,6 +35,10 @@ schedule_and_weekly_df = schedule_and_weekly_df[
 # Remove any records where game_type != 'REG'
 schedule_and_weekly_df = schedule_and_weekly_df[schedule_and_weekly_df['game_type'] == 'REG']
 schedule_and_weekly_df.drop(columns=['game_type', 'season_type'], inplace=True)
+
+MODEL_FEATURES_LIST = [
+    col for col in schedule_and_weekly_df.columns if col not in EXCLUDE_COLUMNS_LIST
+]
 
 # %%
 # if opp_days_since_previous_game or target_days_since_previous_game is the only NaN in the row,
