@@ -58,6 +58,18 @@ def get_schedule_and_weekly_data(years):
     away_is_target = _convert_team_to_target(combined_data, is_home_target=False)
     combined_data = pd.concat([home_is_target, away_is_target], ignore_index=True)
 
+    # Create a condition for when the home team is the target and they won
+    home_win_condition = (combined_data['is_home_target'] == 1) & (combined_data['h_win'] == 1)
+
+    # Create a condition for when the away team is the target and they won
+    away_win_condition = (combined_data['is_home_target'] == 0) & (combined_data['h_win'] == 0)
+
+    # Create a new DataFrame for the 'target_win' column
+    target_win_df = pd.DataFrame((home_win_condition | away_win_condition).astype(int), columns=['target_win'])
+
+    # Concatenate the new DataFrame with the original one
+    combined_data = pd.concat([combined_data, target_win_df], axis=1)
+
     combined_data = _shift_data(combined_data)
     return combined_data
 
@@ -107,22 +119,26 @@ def _convert_team_to_target(df, is_home_target: bool):
     return target_df
 
 
-def _get_stats_columns(df):
+def _get_cols_to_shift(df):
     stats_data_cols = [col for col in df.columns if 'target' in col or 'opp' in col]
-    cols_not_stats = [
+    cols_to_not_shift = [
         'target_days_since_previous_game', 'opp_days_since_previous_game',
         'target_game_count', 'opp_game_count', 'target_team', 'opp_team',
-        'target_score', 'opp_score', 'is_home_target'
+        'target_score', 'opp_score', 'is_home_target', 'target_win'
     ]
-    for col in cols_not_stats:
+    for col in cols_to_not_shift:
         stats_data_cols.remove(col)
     return stats_data_cols
 
 
 def _shift_data(combined_data):
-    # shift the weeks for each team to get the previous week's data. For example, the stats for week 1 should be in
-    # week 2, and so on
-    stats_columns = _get_stats_columns(combined_data)
+    """
+    shift the weeks for each team to get the previous week's data. For example, the stats
+    for week 1 should be in week 2, and so on
+    :param combined_data: DataFrame with the combined schedule and weekly data
+    :return: DataFrame with the stats shifted by one week
+    """
+    stats_columns = _get_cols_to_shift(combined_data)
     teams = combined_data['target_team'].unique()
     target_stat_cols = [col for col in stats_columns if 'target' in col]
     opp_stat_cols = [col for col in stats_columns if 'opp' in col]

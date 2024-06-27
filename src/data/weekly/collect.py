@@ -1,7 +1,8 @@
 import nfl_data_py as nfl
 import pandas as pd
 
-# There are times when passing yards != receiving yards, but it's rare so we'll ignore receiving yards
+# There are times when passing yards != receiving yards, but it's rare so
+# we'll ignore receiving yards
 # and tds since they are duplicated in the passing stats
 ONLY_NON_IDENTIFIER_COLUMNS = [
     'recent_team', 'season', 'week',
