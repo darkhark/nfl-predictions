@@ -23,6 +23,7 @@ TEAM_ABBR_MAPPINGS = {
     'OAK': 'LV'
 }
 
+
 def get_schedule_data(years, keep_game_id=True, keep_odds=False):
     """
     Collects schedule data for the specified year(s).
