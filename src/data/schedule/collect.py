@@ -14,6 +14,14 @@ ODDS_COLS = [
     'under_odds', 'over_odds'
 ]
 
+# If a team moved cities, the name in the weekly data will be the most recent name
+# For a sooth merge with the weekly data, the team names in the schedule data need to be updated
+# The key will be the team name in the schedule data and the value will be the team name in the weekly data
+TEAM_ABBR_MAPPINGS = {
+    'STL': 'LA',
+    'SD': 'LAC',
+    'OAK': 'LV'
+}
 
 def get_schedule_data(years, keep_game_id=True, keep_odds=False):
     """
@@ -54,7 +62,8 @@ def get_schedule_data(years, keep_game_id=True, keep_odds=False):
             schedule_df = df
         else:
             schedule_df = pd.concat([schedule_df, df], ignore_index=True)
-
+    schedule_df['home_team'] = schedule_df['home_team'].replace(TEAM_ABBR_MAPPINGS)
+    schedule_df['away_team'] = schedule_df['away_team'].replace(TEAM_ABBR_MAPPINGS)
     return schedule_df
 
 
