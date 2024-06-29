@@ -1,6 +1,6 @@
 feature
 season
-game_type
+week
 div_game
 target_days_since_previous_game
 target_off_cumulative_score
@@ -17,7 +17,6 @@ opp_def_cumulative_points_allowed
 opp_def_cumulative_avg_points_allowed
 opp_def_cumulative_avg_points_allowed_change
 indoor
-season_type
 target_game_count
 opp_game_count
 off_target_completions

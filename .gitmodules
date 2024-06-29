@@ -1,3 +1,3 @@
 [submodule "data-science-utilities"]
-	path = data-science-utilities
+	path = data_science_utilities
 	url = git@github.com:darkhark/data-science-utilities.git
