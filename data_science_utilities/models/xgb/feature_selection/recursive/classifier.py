@@ -33,7 +33,6 @@ class ClassifierRecursiveFeatureElimination:
         self.xgb_params = xgb_params
         self.label_encoder = label_encoder
         self.model_score_metric = model_score_metric
-        self.random_search = None
         self.features = self.X_train.columns
         self.all_features = {}
         self.test_preds = []
@@ -41,7 +40,7 @@ class ClassifierRecursiveFeatureElimination:
         self.all_model_scores = []
         self.importances = None
 
-    def fit(self, drop_rate=.1, max_iter=10, verbose=0, base_margin=None):
+    def get_optimal_features(self, drop_rate=.1, max_iter=10, verbose=0, base_margin=None):
         """
         Removes features based on a specified decay rate until the maximum number of iterations is reached. It then
         recalculates the feature importance and evaluates the model on the specified metric.
