@@ -41,15 +41,20 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
             # create cross validation folds
             strat_k_fold = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=self._RANDOM_SEED)
             model_scores = []
-            for fold, train_index, test_index in enumerate(strat_k_fold.split(self.X_train, self.y_train)):
+            for fold, (train_index, test_index) in enumerate(strat_k_fold.split(self.X_train, self.y_train)):
                 X_train, X_test = self.X_train.iloc[train_index], self.X_train.iloc[test_index]
                 y_train, y_test = self.y_train.iloc[train_index], self.y_train.iloc[test_index]
                 model.fit(X_train[train_features], y_train, eval_set=[(X_test[train_features], y_test)], verbose=False)
                 test_preds = model.predict_proba(X_test[train_features])[:, 1]
+                self._get_non_zero_importances(model)
                 model_scores.append(self._get_test_scores(test_preds, y_test))
                 if len(train_features) in self.all_models:
-                    self.all_models[len(train_features)].append(model)
-                    self.test_preds[len(train_features)].append(test_preds)
+                    if fold in self.all_models[len(train_features)]:
+                        self.all_models[len(train_features)][fold].append(model)
+                        self.test_preds[len(train_features)][fold].append(test_preds)
+                    else:
+                        self.all_models[len(train_features)][fold] = model
+                        self.test_preds[len(train_features)][fold] = test_preds
                 else:
                     self.all_models[len(train_features)] = {fold: model}
                     self.test_preds[len(train_features)] = {fold: test_preds}
@@ -144,14 +149,12 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
     def _get_metric_values(self):
         # Get the class names, for example, '0' and '1' for binary classification to use as column names
         if len(self.all_models):
+            first_key = list(self.all_models.keys())[0]
             if self.label_encoder is None:
-                class_names = self.all_models[0].classes_
+                class_names = self.all_models[first_key][0].classes_
             else:
-                class_names = self.label_encoder.inverse_transform(self.all_models[0].classes_)
-            df = pd.DataFrame(self.all_model_scores, index=list(self.all_features.keys()), columns=class_names)
-            # remove all columns after the first if the target column is binary
-            if len(class_names) == 2:
-                df.drop(columns=class_names[1], inplace=True)
+                class_names = self.label_encoder.inverse_transform(self.all_models[first_key][0].classes_)
+            df = pd.DataFrame(self.all_model_scores, index=list(self.all_features.keys()))
             return df
         else:
             return None
