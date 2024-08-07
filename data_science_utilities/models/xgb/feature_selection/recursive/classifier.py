@@ -73,7 +73,6 @@ class ClassifierRecursiveFeatureElimination:
             self.test_preds.append(test_preds)
             self._get_non_zero_importances(model)
             self.all_model_scores.append(self._get_test_metric_values(test_preds))
-            # First iteration culls on it own, drop rate starts on the second iteration
             if i == 0:
                 train_features = list(self.importances.index)
             else:

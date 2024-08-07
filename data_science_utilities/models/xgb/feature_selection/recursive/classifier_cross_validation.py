@@ -10,6 +10,8 @@ from sklearn.model_selection import StratifiedKFold
 
 
 class ClassifierCrossValidationRecursiveFeatureSelection:
+    HIGHER_IS_BETTER_METRICS = ['roc_auc', 'f1', 'precision', 'recall', 'accuracy']
+
     _RANDOM_SEED = 32
 
     def __init__(self, X_train, y_train, xgb_params, label_encoder=None, model_score_metric='roc_auc'):
@@ -20,7 +22,7 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
         self.model_score_metric = model_score_metric
         self.features = self.X_train.columns
         self.all_features = {}
-        self.test_preds = []
+        self.test_preds = {}
         self.all_models = {}
         self.all_model_scores = []
         self.importances = None
@@ -39,17 +41,120 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
             # create cross validation folds
             strat_k_fold = StratifiedKFold(n_splits=n_folds, shuffle=True, random_state=self._RANDOM_SEED)
             model_scores = []
-            for train_index, test_index in strat_k_fold.split(self.X_train, self.y_train):
+            for fold, train_index, test_index in enumerate(strat_k_fold.split(self.X_train, self.y_train)):
                 X_train, X_test = self.X_train.iloc[train_index], self.X_train.iloc[test_index]
                 y_train, y_test = self.y_train.iloc[train_index], self.y_train.iloc[test_index]
                 model.fit(X_train[train_features], y_train, eval_set=[(X_test[train_features], y_test)], verbose=False)
-                preds = model.predict_proba(X_test[train_features])[:, 1]
-                model_scores.append(self._get_test_scores(preds, y_test))
+                test_preds = model.predict_proba(X_test[train_features])[:, 1]
+                model_scores.append(self._get_test_scores(test_preds, y_test))
                 if len(train_features) in self.all_models:
                     self.all_models[len(train_features)].append(model)
+                    self.test_preds[len(train_features)].append(test_preds)
                 else:
-                    self.all_models[len(train_features)] = [model]
+                    self.all_models[len(train_features)] = {fold: model}
+                    self.test_preds[len(train_features)] = {fold: test_preds}
             self.all_model_scores.append(np.mean(model_scores))
+            if i == 0:
+                train_features = list(self.importances.index)
+            else:
+                new_num_features = int(np.floor(len(train_features) * (1 - drop_rate)))
+                train_features = list(self.importances.index)[:new_num_features]
+
+    def get_features_in_dataframe(self):
+        """
+        Get the features in a DataFrame where the index is the number of features and the columns are the feature names
+
+        :return: A DataFrame of the features
+        """
+        return pd.DataFrame.from_dict(self.all_features, orient='index')
+
+    def get_best_num_features(self, min_diff):
+        """
+        This method essentially tries to find the smallest number of features that can achieve a model score within
+        min_diff of the best possible score. This helps to avoid overfitting by using too many features.
+
+        :param min_diff: The minimum difference between the best score and the next best score
+        :return: The number of features that resulted in the best score with the smallest number of features
+        """
+        best_score = 0
+        best_num_feats = 0
+        feats_and_scores = self._get_metric_values()
+        feats_and_scores.sort_index(inplace=True)
+        past_scores = {}
+        for curr_num_feats, scores in feats_and_scores.iterrows():
+            curr_score = scores[0]
+            past_scores[curr_num_feats] = curr_score
+            if self._is_curr_score_better(curr_score, best_score, min_diff):
+                best_num_feats, best_score = self._update_best_score(
+                    past_scores, curr_score, curr_num_feats, min_diff
+                )
+        return best_num_feats
+
+    def _is_curr_score_better(self, curr_score, best_score, min_diff):
+        if self.model_score_metric in self.HIGHER_IS_BETTER_METRICS:
+            is_better_score = curr_score > best_score
+            is_gt_min_diff = (curr_score - best_score) > min_diff
+        else:
+            is_better_score = curr_score < best_score
+            is_gt_min_diff = (best_score - curr_score) > min_diff
+        return is_better_score and is_gt_min_diff
+
+    def _update_best_score(self, past_scores, curr_score, curr_num_feats, min_diff):
+        """
+        Update the best score and number of features if the current score is better than the best score
+        and the difference between the current score and the best score is greater than min_diff.
+
+        If a past score is within min_diff of the current score, then the best score and number of features
+        are updated to the past score and number of features.
+
+        :param past_scores: A dictionary of scores already iterated over where the key is the number
+        of features and the value is the score
+        :param curr_score: The current score in the iteration
+        :param curr_num_feats: The current number of features in the iteration
+        :param min_diff: The threshold for the difference between the best score and the current score
+        :return: The best number of features and the best score given the threshold and reduced model complexity
+        """
+        best_num_feats = curr_score
+        best_score = curr_num_feats
+        for past_num_feats, past_score in past_scores.items():
+            if self.model_score_metric in self.HIGHER_IS_BETTER_METRICS:
+                is_past_score_diff_within_min_diff = curr_score - past_score < min_diff
+            else:
+                is_past_score_diff_within_min_diff = past_score - curr_score < min_diff
+            if is_past_score_diff_within_min_diff:
+                best_num_feats = past_num_feats
+                best_score = past_score
+                break
+        return best_num_feats, best_score
+
+    def plot_model_scores(self, **fig_kw):
+        """
+        Plots the model scores for each iteration of RFE
+
+        :param fig_kw: Keyword arguments passed to plt.figure
+        :return: None
+        """
+        if 'marker' not in fig_kw:
+            fig_kw['marker'] = 'o'
+        ax = self._get_metric_values().plot(**fig_kw)
+        ax.set_xlabel('Number of Features')
+        ax.set_ylabel(self.model_score_metric)
+        return plt.gcf(), ax
+
+    def _get_metric_values(self):
+        # Get the class names, for example, '0' and '1' for binary classification to use as column names
+        if len(self.all_models):
+            if self.label_encoder is None:
+                class_names = self.all_models[0].classes_
+            else:
+                class_names = self.label_encoder.inverse_transform(self.all_models[0].classes_)
+            df = pd.DataFrame(self.all_model_scores, index=list(self.all_features.keys()), columns=class_names)
+            # remove all columns after the first if the target column is binary
+            if len(class_names) == 2:
+                df.drop(columns=class_names[1], inplace=True)
+            return df
+        else:
+            return None
 
     def _get_test_scores(self, preds, y_test):
         if self.model_score_metric == 'roc_auc':
@@ -67,3 +172,8 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
         else:
             raise ValueError('model_score_metric must be one of roc_auc, log_loss, f1, precision, recall, accuracy')
         return score
+
+    def _get_non_zero_importances(self, model):
+        importances = pd.Series(model.get_booster().get_score(), name='Feature Importance')
+        importances = importances.T.sort_values(ascending=False)
+        self.importances = importances[importances > 0]
