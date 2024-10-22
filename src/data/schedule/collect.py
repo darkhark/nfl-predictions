@@ -97,6 +97,11 @@ def _add_cumulative_columns(df, offense=True):
     if offense:
         # Calculate the number of days since the previous game for each team
         team_df['days_since_previous_game'] = team_df.groupby(['team', 'season'])['gameday'].diff().dt.days
+        # Add the bye week column
+        team_df['bye_week'] = team_df['days_since_previous_game'].apply(lambda x: 1 if 10 <= x < 20 else 0)
+        # This worked above, but I got bye_week_x and bye_week_y because of the merge.
+        # I also want to take the week of the bye and subtract by the week number to get number of days since bye.
+        # Week 10 bye. Week 1 = (10-1) * 7. Week 11 = (10-11) * 7
 
     team_df = _calculate_cumulative_avg_score(team_df, offense=offense)
 
