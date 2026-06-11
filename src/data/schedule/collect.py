@@ -110,11 +110,11 @@ def _create_team_df(df, offense=True):
         scores = ['home_score', 'away_score']
     else:
         scores = ['away_score', 'home_score']
-    home_df = df[['gameday', 'home_team', scores[0], 'season']].rename(columns={
+    home_df = df[['gameday', 'home_team', scores[0], 'season', 'week']].rename(columns={
         'home_team': 'team',
         scores[0]: 'score'
     })
-    away_df = df[['gameday', 'away_team', scores[1], 'season']].rename(columns={
+    away_df = df[['gameday', 'away_team', scores[1], 'season', 'week']].rename(columns={
         'away_team': 'team',
         scores[1]: 'score'
     })
@@ -133,6 +133,30 @@ def _calculate_cumulative_avg_score(team_df, offense=True):
     team_df[f'cumulative_avg_{points}_change'] = team_df.groupby(['team', 'season'])[f'cumulative_avg_{points}'].diff()
     team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, f'cumulative_avg_{points}'] = team_df['score']
     team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, f'cumulative_avg_{points}_change'] = 0
+
+    team_df = _add_score_rank_columns(team_df, points, offense)
+    # 'week' was only needed to rank teams against each other; drop it so the later merge on
+    # ['gameday', 'team', 'season'] does not collide with the schedule frame's own 'week' column
+    team_df.drop(columns=['week'], inplace=True)
+    return team_df
+
+
+def _add_score_rank_columns(team_df, points, offense):
+    """
+    Add a cross-sectional rank and a week-over-week rank-change for the cumulative average points
+    scored (offense) or allowed (defense), ranked within each (season, week).
+
+    Offense is ranked descending (rank 1 = most points scored). Defense is ranked ascending
+    (rank 1 = fewest points allowed = best defense). The first game of each (team, season) has a
+    rank-change of 0.
+    """
+    base = f'cumulative_avg_{points}'
+    team_df[f'{base}_rank'] = team_df.groupby(['season', 'week'])[base].rank(
+        ascending=(not offense), method='min'
+    )
+    team_df = team_df.sort_values(['team', 'season', 'week'])
+    team_df[f'{base}_rank_change'] = team_df.groupby(['team', 'season'])[f'{base}_rank'].diff()
+    team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, f'{base}_rank_change'] = 0
     return team_df
 
 
@@ -152,7 +176,9 @@ def _merge_team_df(df, team_df, team_type, offense=True):
         'days_since_previous_game': f'{team_type}_days_since_previous_game',
         f'cumulative_{score}': f'{team_type}_{side}_cumulative_{score}',
         f'cumulative_avg_{score}': f'{team_type}_{side}_cumulative_avg_{score}',
-        f'cumulative_avg_{score}_change': f'{team_type}_{side}_cumulative_avg_{score}_change'
+        f'cumulative_avg_{score}_change': f'{team_type}_{side}_cumulative_avg_{score}_change',
+        f'cumulative_avg_{score}_rank': f'{team_type}_{side}_cumulative_avg_{score}_rank',
+        f'cumulative_avg_{score}_rank_change': f'{team_type}_{side}_cumulative_avg_{score}_rank_change'
     }
     if not offense:
         # remove the key value pair of days since previous game since it will exist for the offense which is called 1st

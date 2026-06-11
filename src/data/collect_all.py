@@ -120,6 +120,20 @@ def _convert_team_to_target(df, is_home_target: bool):
 
 
 def _get_cols_to_shift(df):
+    """
+    Gets the columns that should be shifted by one week to get the previous week's data. This includes all columns
+    that contain 'target' or 'opp' in their name, except for the following columns:
+        - target_days_since_previous_game
+        - opp_days_since_previous_game
+        - target_game_count
+        - opp_game_count
+        - target_team
+        - opp_team
+        - target_score
+        - opp_score
+        - is_home_target
+        - target_win
+    """
     stats_data_cols = [col for col in df.columns if 'target' in col or 'opp' in col]
     cols_to_not_shift = [
         'target_days_since_previous_game', 'opp_days_since_previous_game',

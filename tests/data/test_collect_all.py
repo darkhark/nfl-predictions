@@ -90,6 +90,37 @@ class MyTestCase(unittest.TestCase):
             diff_df_opp = diff_df_opp[diff_df_opp.columns[diff_df_opp.notna().any()]]
             self.assertTrue(diff_df_opp.empty)
 
+    def test_rank_columns_are_routed_to_all_four_families(self):
+        expected_columns = [
+            'off_target_passing_yards_cumulative_average_rank',
+            'off_opp_passing_yards_cumulative_average_rank',
+            'def_target_passing_yards_cumulative_average_rank',
+            'def_opp_passing_yards_cumulative_average_rank',
+            'target_off_cumulative_avg_score_rank',
+            'opp_def_cumulative_avg_points_allowed_rank',
+        ]
+        for column in expected_columns:
+            self.assertIn(column, self.all_data.columns)
+
+    def test_rank_column_is_shifted_one_game_forward(self):
+        rank_col = 'def_target_passing_yards_cumulative_average_rank'
+        for week in range(1, 18):
+            if week == self.BYE_WEEK_2023 or week + 1 == self.BYE_WEEK_2023:
+                continue
+            before = self.before_shift_df[
+                (self.before_shift_df['week'] == week) &
+                (self.before_shift_df['target_team'] == 'LA') &
+                (self.before_shift_df['season'] == 2023)
+            ][rank_col]
+            after = self.all_data[
+                (self.all_data['week'] == week + 1) &
+                (self.all_data['target_team'] == 'LA') &
+                (self.all_data['season'] == 2023)
+            ][rank_col]
+            if before.empty or after.empty:
+                continue
+            self.assertEqual(before.values[0], after.values[0])
+
     def _get_stats_columns(self):
         stats_data_cols = [col for col in self.before_shift_df.columns if 'target' in col or 'opp' in col]
         cols_not_stats = [

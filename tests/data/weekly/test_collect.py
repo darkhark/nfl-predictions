@@ -3,10 +3,17 @@ from src.data.weekly import collect
 
 TEAM = 'team'
 WEEK = 'week'
+SEASON = 'season'
 OPP_TEAM = 'opp_team'
+TEAM_GAME_COUNT = 'team_game_count'
+OPP_GAME_COUNT = 'opp_game_count'
 PASSING_YARDS_OFF = 'off_passing_yards'
 PASSING_YARDS_OFF_CUMULATIVE = 'off_passing_yards_cumulative_average'
 PASSING_YARDS_DEF_OPP_CUMULATIVE = 'def_opp_passing_yards_cumulative_average'
+PASSING_YARDS_OFF_RANK = 'off_passing_yards_cumulative_average_rank'
+PASSING_YARDS_OFF_RANK_CHANGE = 'off_passing_yards_cumulative_average_rank_change'
+PASSING_YARDS_DEF_OPP_RANK = 'def_opp_passing_yards_cumulative_average_rank'
+PASSING_YARDS_DEF_OPP_RANK_CHANGE = 'def_opp_passing_yards_cumulative_average_rank_change'
 
 
 class TestCollect(unittest.TestCase):
@@ -80,6 +87,63 @@ class TestCollect(unittest.TestCase):
                 print("Bye week is week ", week, " for LA. Continuing...")
                 bye_week = week
                 continue
+    def test_offense_rank_one_holds_the_max_cumulative_average(self):
+        week_eight = self.weekly_data[self.weekly_data[WEEK] == 8]
+        max_cumulative_average = week_eight[PASSING_YARDS_OFF_CUMULATIVE].max()
+        rank_one_rows = week_eight[week_eight[PASSING_YARDS_OFF_RANK] == 1]
+        self.assertFalse(rank_one_rows.empty)
+        for value in rank_one_rows[PASSING_YARDS_OFF_CUMULATIVE]:
+            self.assertEqual(value, max_cumulative_average)
+
+    def test_defense_rank_one_holds_the_min_cumulative_average(self):
+        week_eight = self.weekly_data[self.weekly_data[WEEK] == 8]
+        min_cumulative_average = week_eight[PASSING_YARDS_DEF_OPP_CUMULATIVE].min()
+        rank_one_rows = week_eight[week_eight[PASSING_YARDS_DEF_OPP_RANK] == 1]
+        self.assertFalse(rank_one_rows.empty)
+        for value in rank_one_rows[PASSING_YARDS_DEF_OPP_CUMULATIVE]:
+            self.assertEqual(value, min_cumulative_average)
+
+    def test_ranks_span_one_to_number_of_teams_each_week(self):
+        for week in range(1, 18):
+            week_data = self.weekly_data[self.weekly_data[WEEK] == week]
+            number_of_teams = week_data[TEAM].nunique()
+            ranks = week_data[PASSING_YARDS_OFF_RANK]
+            self.assertEqual(ranks.min(), 1)
+            self.assertLessEqual(ranks.max(), number_of_teams)
+            self.assertGreaterEqual(ranks.min(), 1)
+
+    def test_offense_rank_change_equals_consecutive_game_rank_diff(self):
+        la_games = self.weekly_data[self.weekly_data[TEAM] == 'LA'].sort_values(TEAM_GAME_COUNT)
+        previous_rank = None
+        for _, row in la_games.iterrows():
+            if previous_rank is not None:
+                expected_change = row[PASSING_YARDS_OFF_RANK] - previous_rank
+                self.assertEqual(row[PASSING_YARDS_OFF_RANK_CHANGE], expected_change)
+            previous_rank = row[PASSING_YARDS_OFF_RANK]
+
+    def test_defense_rank_change_equals_consecutive_opp_game_rank_diff(self):
+        la_games = self.weekly_data[self.weekly_data[OPP_TEAM] == 'LA'].sort_values(OPP_GAME_COUNT)
+        previous_rank = None
+        for _, row in la_games.iterrows():
+            if previous_rank is not None:
+                expected_change = row[PASSING_YARDS_DEF_OPP_RANK] - previous_rank
+                self.assertEqual(row[PASSING_YARDS_DEF_OPP_RANK_CHANGE], expected_change)
+            previous_rank = row[PASSING_YARDS_DEF_OPP_RANK]
+
+    def test_offense_rank_change_is_zero_for_first_game(self):
+        first_games = self.weekly_data[self.weekly_data[TEAM_GAME_COUNT] == 1]
+        self.assertTrue((first_games[PASSING_YARDS_OFF_RANK_CHANGE] == 0).all())
+
+    def test_defense_rank_change_is_zero_for_first_game(self):
+        first_games = self.weekly_data[self.weekly_data[OPP_GAME_COUNT] == 1]
+        self.assertTrue((first_games[PASSING_YARDS_DEF_OPP_RANK_CHANGE] == 0).all())
+
+    def test_offense_rank_order_matches_descending_cumulative_average(self):
+        week_eight = self.weekly_data[self.weekly_data[WEEK] == 8]
+        values_sorted_by_rank = week_eight.sort_values(
+            PASSING_YARDS_OFF_RANK
+        )[PASSING_YARDS_OFF_CUMULATIVE].tolist()
+        self.assertEqual(values_sorted_by_rank, sorted(values_sorted_by_rank, reverse=True))
 
 
 if __name__ == '__main__':
