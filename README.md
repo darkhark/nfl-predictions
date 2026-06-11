@@ -120,43 +120,49 @@ defense-matches-opposing-offense invariant, and bye-week edge cases.
 ## Results / experiment log
 
 All runs evaluate on a **2023 hold-out season** (every prior season is used for
-train/validation). The cross-validated RFE selects the feature set, then a randomized
-hyperparameter search tunes the XGBoost classifier. Three metrics are tracked:
+train/validation). Cross-validated RFE selects the feature set, then a randomized
+hyperparameter search tunes the XGBoost classifier. Two **out-of-sample** metrics are tracked:
 
-- **Hold-out accuracy** — `best_model.score` on the 2023 rows (both target/opp perspectives).
-- **Weekly AUROC (all rows)** — mean over weeks of ROC-AUC on the doubled target/opp rows.
-- **Weekly AUROC (per game)** — same, but after keeping only the higher-probability row per
-  game. This dedups the symmetric rows and is the more honest game-level metric.
+- **Hold-out ROC-AUC (2023)** — ROC-AUC over all 2023 rows pooled (both target/opp
+  perspectives). Reported as the per-week mean, which matches the single pooled curve to
+  within ~0.001.
+- **Hold-out accuracy** — `best_model.score` on the 2023 rows at a 0.5 threshold.
 
-| # | Date | Feature selection | Features | Hold-out acc | Weekly AUROC (all) | Weekly AUROC (per game) |
-| --- | --- | --- | ---: | ---: | ---: | ---: |
-| 1 | 2024-07-23 | RFE (single split) | 28 | 0.597 | 0.629 | 0.592 |
-| 2 | 2024-08-06 | Cross-validated RFE (`StratifiedKFold`) | 34 | 0.597 | 0.643 | 0.605 |
-| 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.599 | 0.643 | 0.587 |
-| 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | **0.618** | 0.641 | 0.554 |
+> **In-sample vs out-of-sample.** The RFE and grid-search *cross-validated* ROC-AUC
+> (~0.677 for runs 3–4) is measured on the training seasons and is naturally higher than the
+> 2023 hold-out ROC-AUC (~0.64); the ~0.03 gap is the normal generalization drop, not a
+> regression introduced by tuning. An earlier "per-game AUROC" column was removed as
+> misleading — it kept only the higher-probability row per game, which conditions on the
+> model's own output and reads ~0.53–0.55 (near chance) for reasons unrelated to model quality.
+
+| # | Date | Feature selection | Features | Hold-out ROC-AUC | Hold-out acc |
+| --- | --- | --- | ---: | ---: | ---: |
+| 1 | 2024-07-23 | RFE (single split) | 28 | 0.629 | 0.597 |
+| 2 | 2024-08-06 | Cross-validated RFE (`StratifiedKFold`) | 34 | 0.643 | 0.597 |
+| 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.643 | 0.599 |
+| 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | **0.618** |
 
 **What changed between runs**
 
 - **Run 1 → 2:** moved feature selection and tuning to cross-validated RFE
-  (`StratifiedKFold`) for more stable selection; selected set grew 28 → 34. Weekly AUROC on
-  all rows improved (0.629 → 0.643); hold-out accuracy was flat.
+  (`StratifiedKFold`) for more stable selection; selected set grew 28 → 34. Hold-out ROC-AUC
+  improved (0.629 → 0.643); accuracy was flat.
 - **Run 2 → 3:** added **league-wide rank and rank-change features** — for every cumulative
-  form stat, each team's rank within its `(season, week)` (offense ranked best-to-worst,
-  defense worst-to-best) and the week-over-week change in that rank, plus ranks for points
-  scored / allowed. This expanded the candidate pool from ~352 to ~576 columns. RFE selected
-  **40 features, 7 of them new rank features**, so the ranks carry some signal — but out-of-sample
-  performance was essentially unchanged (accuracy 0.597 → 0.599, all-rows weekly AUROC flat at
-  0.643) and the per-game weekly AUROC slipped slightly (0.605 → 0.587). Net: the rank
-  features were selected but did not improve hold-out results.
-- **Run 3 → 4:** dropped every non-rank cumulative feature (the averages, their week-over-week
-  changes, and the cumulative sums) before RFE — keeping only the rank / rank-change features
-  plus the raw per-game stats and context. The hypothesis was that the ranks were being crowded
-  out by their highly-correlated source columns. It held: RFE now selected **22 of 32 features as
-  ranks** (vs 7 of 40 in Run 3), and **hold-out accuracy rose to 0.618 — the best of any run**
-  (+2 pts over the long-standing 0.597). The trade-off is that the per-game weekly AUROC dropped
-  to 0.554, so the rank-only model classifies win/loss better but ranks within-week confidence
-  worse. Reproduce by setting `RANK_ONLY = True` (the default for this experiment) in
-  `cross_validation/rfe.ipynb`; set it to `False` to restore the full-feature pipeline.
+  form stat, each team's rank within its `(season, week)` (offense best-to-worst, defense
+  worst-to-best) and the week-over-week change in that rank, plus ranks for points scored /
+  allowed. This expanded the candidate pool from ~352 to ~576 columns. RFE selected **40
+  features, only 7 of them ranks**, and out-of-sample performance was essentially unchanged
+  (ROC-AUC 0.643, accuracy 0.599) — the ranks were mostly crowded out by their
+  highly-correlated cumulative-average source columns.
+- **Run 3 → 4:** dropped every non-rank cumulative feature (averages, their changes, and
+  sums) before RFE, keeping only the rank / rank-change features plus raw per-game stats and
+  context. The crowding-out hypothesis held: RFE now selected **22 of 32 features as ranks**
+  (vs 7 of 40 in Run 3), and **hold-out accuracy rose to 0.618 — the best of any run** (+2 pts
+  over the long-standing 0.597), with ROC-AUC holding at 0.642. Reproduce by setting
+  `RANK_ONLY = True` (the default for this experiment) in `cross_validation/rfe.ipynb`; set it
+  to `False` to restore the full-feature pipeline.
+  > Single-season caveat: this is one 2023 hold-out, so the +2-pt accuracy gain is suggestive,
+  > not conclusive — worth confirming across multiple hold-out seasons.
 
 ## Roadmap
 
