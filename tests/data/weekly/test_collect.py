@@ -1,4 +1,8 @@
 import unittest
+from unittest import mock
+
+import pandas as pd
+
 from src.data.weekly import collect
 
 TEAM = 'team'
@@ -144,6 +148,50 @@ class TestCollect(unittest.TestCase):
             PASSING_YARDS_OFF_RANK
         )[PASSING_YARDS_OFF_CUMULATIVE].tolist()
         self.assertEqual(values_sorted_by_rank, sorted(values_sorted_by_rank, reverse=True))
+
+
+class TestLoadWeeklyYear(unittest.TestCase):
+    """Unit tests for the source mapping from nflverse's 'stats_player' release to the
+    canonical column names the pipeline expects. The network read is mocked out."""
+
+    def _fake_new_release_row(self):
+        # A single-row frame using the new release's column names, including the renamed
+        # columns and an extra column (dakota was removed upstream and must not be required).
+        return pd.DataFrame([{
+            'team': 'LA', 'season': 2025, 'week': 1, 'season_type': 'REG',
+            'opponent_team': 'SEA', 'completions': 20, 'attempts': 30,
+            'passing_yards': 250, 'passing_tds': 2, 'passing_interceptions': 1,
+            'sacks_suffered': 3, 'sack_yards_lost': -21,
+            'sack_fumbles': 0, 'sack_fumbles_lost': 0, 'passing_air_yards': 300,
+            'passing_yards_after_catch': 120, 'passing_first_downs': 12, 'passing_epa': 5.5,
+            'pacr': 0.8, 'carries': 25, 'rushing_yards': 110, 'rushing_tds': 1,
+            'rushing_fumbles': 0, 'rushing_fumbles_lost': 0, 'rushing_first_downs': 6,
+            'rushing_epa': 2.1, 'receiving_fumbles': 0, 'receiving_fumbles_lost': 0,
+            'racr': 0.9, 'wopr': 0.0, 'special_teams_tds': 0,
+            'some_new_unused_column': 99,
+        }])
+
+    def test_returns_only_canonical_columns(self):
+        with mock.patch.object(collect.pd, 'read_parquet', return_value=self._fake_new_release_row()):
+            result = collect._load_weekly_year(2025)
+        self.assertEqual(list(result.columns), collect.ONLY_NON_IDENTIFIER_COLUMNS)
+
+    def test_renames_new_release_columns_to_canonical_names(self):
+        with mock.patch.object(collect.pd, 'read_parquet', return_value=self._fake_new_release_row()):
+            result = collect._load_weekly_year(2025)
+        row = result.iloc[0]
+        self.assertEqual(row['recent_team'], 'LA')
+        self.assertEqual(row['interceptions'], 1)
+        self.assertEqual(row['sacks'], 3)
+
+    def test_sack_yards_restored_to_positive_convention(self):
+        with mock.patch.object(collect.pd, 'read_parquet', return_value=self._fake_new_release_row()):
+            result = collect._load_weekly_year(2025)
+        # New release stores -21; pipeline expects the positive legacy convention.
+        self.assertEqual(result.iloc[0]['sack_yards'], 21)
+
+    def test_dakota_is_not_part_of_the_feature_set(self):
+        self.assertNotIn('dakota', collect.ONLY_NON_IDENTIFIER_COLUMNS)
 
 
 if __name__ == '__main__':

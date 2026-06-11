@@ -14,7 +14,7 @@ calibration, and drift-aware design) to football analytics.
 ## What it does
 
 - **Target:** predict the winner of each regular-season NFL game (binary classification).
-- **Data:** 21 seasons of real NFL data (2003–2023) assembled from schedules, weekly
+- **Data:** 23 seasons of real NFL data (2003–2025) assembled from schedules, weekly
   team/player stats, and Next Gen Stats.
 - **Approach:** engineer prior-week team form features, select a compact feature set with
   a custom RFE routine, tune an XGBoost classifier, and calibrate the output probabilities.
@@ -27,12 +27,15 @@ calibration, and drift-aware design) to football analytics.
 
 ## Data sources
 
-All data is pulled from `nfl_data_py`:
+Data is pulled from [nflverse](https://github.com/nflverse). Schedules come through
+`nfl_data_py`; weekly player stats are read directly from nflverse's current
+`stats_player` release, because the legacy `nfl_data_py` weekly endpoint was frozen at the
+2024 season (and dropped the `dakota` metric — see [run 5](#results--experiment-log)):
 
 | Source | Module | Notes |
 | --- | --- | --- |
-| Schedules | `src/data/schedule/collect.py` | Game results, rest days, roof type, optional Vegas lines |
-| Weekly stats | `src/data/weekly/collect.py` | Team-aggregated offensive/defensive box-score stats |
+| Schedules | `src/data/schedule/collect.py` | Game results, rest days, roof type, optional Vegas lines (`nfl_data_py`) |
+| Weekly stats | `src/data/weekly/collect.py` | Team-aggregated offensive/defensive box-score stats (nflverse `stats_player` release) |
 | Next Gen Stats | `src/data/next_gen_stats/collect.py` | Passing / rushing / receiving advanced metrics |
 | Play-by-play | `src/data/play_by_play/collect.py` | Scaffolded for future week-level aggregation |
 
@@ -64,7 +67,8 @@ Reusable, model-agnostic-ish components built around XGBoost:
 - **Recursive Feature Elimination** (`feature_selection/recursive/classifier.py`):
   iteratively drops the least-important features by a decay rate and selects the *smallest*
   feature set within a tolerance of the best AUROC, to control overfitting. Reduces the
-  candidate pool (~571 columns as of the latest run) to a compact selected set (~40).
+  candidate pool (~554 columns as of the latest run, ~329 after the rank-only filter) to a
+  compact selected set (~54).
 - **Cross-validated RFE** (`classifier_cross_validation.py`): the same idea under
   `StratifiedKFold` for more stable feature selection.
 - **Randomized hyperparameter search** (`hyperparameter_search/random_search.py`):
@@ -119,28 +123,34 @@ defense-matches-opposing-offense invariant, and bye-week edge cases.
 
 ## Results / experiment log
 
-All runs evaluate on a **2023 hold-out season** (every prior season is used for
-train/validation). Cross-validated RFE selects the feature set, then a randomized
-hyperparameter search tunes the XGBoost classifier. Two **out-of-sample** metrics are tracked:
+Runs 1–4 evaluate on a single **2023 hold-out season**; run 5 moves to a **two-season
+2024+2025 hold-out** (every prior season is used for train/validation). Cross-validated RFE
+selects the feature set, then a randomized hyperparameter search tunes the XGBoost
+classifier. Two **out-of-sample** metrics are tracked:
 
-- **Hold-out ROC-AUC (2023)** — ROC-AUC over all 2023 rows pooled (both target/opp
+- **Hold-out ROC-AUC** — ROC-AUC over all hold-out rows pooled (both target/opp
   perspectives). Reported as the per-week mean, which matches the single pooled curve to
-  within ~0.001.
-- **Hold-out accuracy** — `best_model.score` on the 2023 rows at a 0.5 threshold.
+  within ~0.002.
+- **Hold-out accuracy** — `best_model.score` on the hold-out rows at a 0.5 threshold.
 
-> **In-sample vs out-of-sample.** The RFE and grid-search *cross-validated* ROC-AUC
-> (~0.677 for runs 3–4) is measured on the training seasons and is naturally higher than the
-> 2023 hold-out ROC-AUC (~0.64); the ~0.03 gap is the normal generalization drop, not a
-> regression introduced by tuning. An earlier "per-game AUROC" column was removed as
-> misleading — it kept only the higher-probability row per game, which conditions on the
-> model's own output and reads ~0.53–0.55 (near chance) for reasons unrelated to model quality.
+> **In-sample vs out-of-sample.** For runs 1–4 the grid-search *cross-validated* ROC-AUC
+> (~0.677) was measured on the training seasons and ran ~0.03 above the 2023 hold-out
+> (~0.64) — a normal generalization drop. On the larger run-5 hold-out the relationship
+> flips: pooled 2024+2025 ROC-AUC (**0.697**) sits slightly *above* the CV score (0.681),
+> i.e. those two seasons were a touch more separable than the training-era cross-validation.
+> An earlier "per-game AUROC" column was removed as misleading — it kept only the
+> higher-probability row per game, which conditions on the model's own output and reads
+> ~0.53–0.55 (near chance) for reasons unrelated to model quality. (For the right way to ask
+> "when the model is confident, how good is it?", see the calibration / confidence-bucket /
+> home-vs-away-gap cells in `cross_validation/grid_search.ipynb`.)
 
 | # | Date | Feature selection | Features | Hold-out ROC-AUC | Hold-out acc |
 | --- | --- | --- | ---: | ---: | ---: |
 | 1 | 2024-07-23 | RFE (single split) | 28 | 0.629 | 0.597 |
 | 2 | 2024-08-06 | Cross-validated RFE (`StratifiedKFold`) | 34 | 0.643 | 0.597 |
 | 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.643 | 0.599 |
-| 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | **0.618** |
+| 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | 0.618 |
+| 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** |
 
 **What changed between runs**
 
@@ -163,6 +173,17 @@ hyperparameter search tunes the XGBoost classifier. Two **out-of-sample** metric
   to `False` to restore the full-feature pipeline.
   > Single-season caveat: this is one 2023 hold-out, so the +2-pt accuracy gain is suggestive,
   > not conclusive — worth confirming across multiple hold-out seasons.
+- **Run 4 → 5:** extended the data through 2025 and moved to a **two-season 2024+2025
+  hold-out** (train `<2022`, early-stopping slice `2022–2023`). This required switching the
+  weekly source to nflverse's current `stats_player` release, which **dropped the `dakota`
+  metric** — so it was removed from the feature set and RFE was re-run on the dakota-free,
+  rank-only candidate pool, selecting **54 features (37 ranks)**. On the larger hold-out,
+  pooled ROC-AUC rose to **0.697** and accuracy to **0.647** (544 games / 1,088 rows). The
+  sharper, retrained model also makes far more confident calls: confidence-bucketed accuracy
+  is now monotonic (the 0.7–0.8 bucket holds **83 games at ~82%** vs only 5 games before),
+  and the home-vs-away probability gap correlates with correctness much more strongly
+  (r 0.07 → **0.21**; widest-gap quintile ~81% accurate). The two-season hold-out resolves
+  the single-season caveat from run 4.
 
 ## Roadmap
 
