@@ -133,6 +133,7 @@ hyperparameter search tunes the XGBoost classifier. Three metrics are tracked:
 | 1 | 2024-07-23 | RFE (single split) | 28 | 0.597 | 0.629 | 0.592 |
 | 2 | 2024-08-06 | Cross-validated RFE (`StratifiedKFold`) | 34 | 0.597 | 0.643 | 0.605 |
 | 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.599 | 0.643 | 0.587 |
+| 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | **0.618** | 0.641 | 0.554 |
 
 **What changed between runs**
 
@@ -147,6 +148,15 @@ hyperparameter search tunes the XGBoost classifier. Three metrics are tracked:
   performance was essentially unchanged (accuracy 0.597 → 0.599, all-rows weekly AUROC flat at
   0.643) and the per-game weekly AUROC slipped slightly (0.605 → 0.587). Net: the rank
   features were selected but did not improve hold-out results.
+- **Run 3 → 4:** dropped every non-rank cumulative feature (the averages, their week-over-week
+  changes, and the cumulative sums) before RFE — keeping only the rank / rank-change features
+  plus the raw per-game stats and context. The hypothesis was that the ranks were being crowded
+  out by their highly-correlated source columns. It held: RFE now selected **22 of 32 features as
+  ranks** (vs 7 of 40 in Run 3), and **hold-out accuracy rose to 0.618 — the best of any run**
+  (+2 pts over the long-standing 0.597). The trade-off is that the per-game weekly AUROC dropped
+  to 0.554, so the rank-only model classifies win/loss better but ranks within-week confidence
+  worse. Reproduce by setting `RANK_ONLY = True` (the default for this experiment) in
+  `cross_validation/rfe.ipynb`; set it to `False` to restore the full-feature pipeline.
 
 ## Roadmap
 
