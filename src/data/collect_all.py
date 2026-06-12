@@ -23,13 +23,17 @@ def get_all_data(years):
         raise TypeError('years must be a list or an integer')
 
 
-def get_schedule_and_weekly_data(years):
+def get_schedule_and_weekly_data(years, include_play_by_play=False):
     """
     Collects schedule and weekly data for the specified year(s). Merges the data from the following sources:
         - Weekly
         - Schedule
+        - Play by Play (optional): wp-context-split efficiency/situational features, merged
+          onto the weekly frame by (team, season, week) before the home/away merge so the
+          target/opp renames and the one-week leakage shift apply to them unchanged
 
     :param years: list of years to collect data for or a single year
+    :param include_play_by_play: merge play-by-play features onto the weekly frame
     :return:
     """
     if isinstance(years, int):
@@ -38,6 +42,14 @@ def get_schedule_and_weekly_data(years):
         raise TypeError('years must be a list or an integer')
 
     weekly_data = weekly_collect.get_weekly_data(years).reset_index(drop=True)
+    if include_play_by_play:
+        pbp_features = pbp_collect.get_play_by_play_features(years)
+        weekly_data = weekly_data.merge(
+            pbp_features,
+            on=['team', 'season', 'week'],
+            how='left',
+            validate='one_to_one',
+        )
     schedule_data = schedule_collect.get_schedule_data(years).reset_index(drop=True)
 
     home_team_is_team = _get_home_or_away_team_in_weekly_data(schedule_data, weekly_data, is_home=True)
