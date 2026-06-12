@@ -382,6 +382,19 @@ class TestPenaltyComponents(unittest.TestCase):
         result = collect._aggregate_penalty_components(plays)
         self.assertTrue(result.empty)
 
+    def test_penalty_team_is_normalized_for_relocated_franchises(self):
+        # penalty_team carries era abbreviations like posteam/defteam; without
+        # normalization a 2005 Chargers penalty would compare 'LAC' == 'SD' and vanish.
+        plays = pd.DataFrame([
+            make_play(posteam='SD', defteam='OAK', play_id=1, is_pass=1, epa=0.1),
+            make_play(posteam='SD', defteam='OAK', play_id=2, penalty=1.0,
+                      penalty_team='SD', penalty_yards=10.0),
+        ])
+        season = collect._aggregate_season(plays)
+        row = season[season['team'] == 'LAC'].iloc[0]
+        self.assertEqual(row['pen_committed_count_competitive'], 1)
+        self.assertEqual(row['pen_committed_yards_sum_competitive'], 10.0)
+
     def test_penalty_components_reach_the_season_frame(self):
         plays = pd.DataFrame([
             make_play(play_id=1, is_pass=1, epa=0.2),
@@ -445,8 +458,18 @@ COMPONENT_COLUMNS = PLAY_COMPONENT_COLUMNS + DRIVE_COMPONENT_COLUMNS + PENALTY_C
 ] + DIRECTIONAL_RATE_METRICS + PHASE3_RATE_METRICS + PENALTY_RATE_METRICS
 ```
 
-(d) In `_aggregate_season`, merge the third component frame (replace the current
-two-frame merge):
+(d) In `_aggregate_season`, FIRST extend the team normalization — `penalty_team` carries
+era abbreviations too, and comparing a normalized `posteam` ('LAC') against an
+unnormalized `penalty_team` ('SD') would silently drop every relocated-franchise
+penalty before 2016:
+
+```python
+    pbp_df['posteam'] = pbp_df['posteam'].replace(TEAM_ABBR_MAPPINGS)
+    pbp_df['defteam'] = pbp_df['defteam'].replace(TEAM_ABBR_MAPPINGS)
+    pbp_df['penalty_team'] = pbp_df['penalty_team'].replace(TEAM_ABBR_MAPPINGS)
+```
+
+Then merge the third component frame (replace the current two-frame merge):
 
 ```python
     play_components = _aggregate_play_components(pbp_df)
