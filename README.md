@@ -270,9 +270,19 @@ metrics are tracked:
   up 0.655 → 0.668. Accuracy at the 0.5 threshold dipped to 0.654 (0.660 run 6) — a
   threshold-sensitive metric at odds with the improved Brier/log-loss, suggesting a
   calibration pass could recover it. Posterior uncertainty remains informative:
-  narrowest-posterior-quartile picks hit **77%**. Net: the directional features are the
-  first addition to move the champion estimator — modestly, but in ranking AND
-  probability quality simultaneously — where XGBoost stayed flat (run 9).
+  narrowest-posterior-quartile picks hit **77%**, and the width-stratified Brier
+  (new cell in `bart.ipynb`) is strictly monotone — **0.171 / 0.220 / 0.234 / 0.246**
+  from narrowest to widest posterior quartile, i.e. the narrow-posterior games carry
+  most of the model's skill while the widest quartile is essentially the no-skill
+  baseline (0.2495). Net: the directional features are the first addition to move the
+  champion estimator — modestly, but in ranking AND probability quality simultaneously —
+  where XGBoost stayed flat (run 9).
+  > Sampler-variability note: PGBART's multiprocess sampling is not bit-reproducible
+  > even with a fixed seed. A verification re-run of the identical notebook landed at
+  > ROC-AUC 0.712 / accuracy 0.661 / Brier 0.2177 (vs the recorded 0.708 / 0.654 /
+  > 0.2185) — treat BART numbers as carrying roughly ±0.004 run-to-run wobble. Both
+  > executions beat run 6 on ROC-AUC and Brier, so the directional improvement is
+  > robust to sampler noise; the table keeps the first recorded execution.
 
 ## Roadmap
 
