@@ -12,7 +12,12 @@ def make_play(posteam='AAA', defteam='BBB', season=2023, week=1, season_type='RE
               down=1, yardline_100=75.0, third_down_converted=0.0, success=0.0,
               epa=0.0, wp=0.5, xpass=None, fixed_drive=1, fixed_drive_result='Punt',
               yards_gained=0.0, run_location=None, run_gap=None,
-              pass_location=None, pass_length=None):
+              pass_location=None, pass_length=None,
+              sack=0.0, qb_hit=0.0, qb_scramble=0.0, shotgun=0.0, no_huddle=0.0,
+              fumble=0.0, fumble_lost=0.0, cpoe=None, complete_pass=0.0,
+              yards_after_catch=0.0, xyac_mean_yardage=None,
+              penalty=0.0, penalty_team=None, penalty_yards=0.0,
+              game_seconds_remaining=3600.0):
     """One synthetic nflfastR play row. 'pass'/'rush' are reserved words as kwargs,
     hence is_pass/is_rush."""
     return {
@@ -27,6 +32,15 @@ def make_play(posteam='AAA', defteam='BBB', season=2023, week=1, season_type='RE
         'yards_gained': yards_gained, 'run_location': run_location,
         'run_gap': run_gap, 'pass_location': pass_location,
         'pass_length': pass_length,
+        'sack': sack, 'qb_hit': qb_hit, 'qb_scramble': qb_scramble,
+        'shotgun': shotgun, 'no_huddle': no_huddle,
+        'fumble': fumble, 'fumble_lost': fumble_lost,
+        'cpoe': float('nan') if cpoe is None else cpoe,
+        'complete_pass': complete_pass, 'yards_after_catch': yards_after_catch,
+        'xyac_mean_yardage': float('nan') if xyac_mean_yardage is None else xyac_mean_yardage,
+        'penalty': penalty, 'penalty_team': penalty_team,
+        'penalty_yards': penalty_yards,
+        'game_seconds_remaining': game_seconds_remaining,
     }
 
 
@@ -526,6 +540,28 @@ class TestDirectionalComponents(unittest.TestCase):
             row[f'{bucket}_attempt_count'] for bucket in collect.RUN_BUCKETS)
         self.assertEqual(bucket_attempts, 0)
         self.assertEqual(row['play_count'], 1)
+
+
+class TestPhase3Constants(unittest.TestCase):
+
+    def test_phase3_generated_lists(self):
+        self.assertEqual(len(collect.PHASE3_PLAY_COMPONENT_COLUMNS), 12)
+        self.assertEqual(len(collect.PENALTY_COMPONENT_COLUMNS), 4)
+        self.assertEqual(len(collect.PHASE3_RATE_METRICS), 9)
+        self.assertEqual(len(collect.PENALTY_RATE_METRICS), 4)
+        self.assertEqual(len(collect.PACE_RATE_METRICS), 1)
+        self.assertIn(('sack_rate', 'sack_count', 'dropback_count'),
+                      collect.PHASE3_RATE_METRICS)
+        self.assertIn(('seconds_per_play', 'pace_seconds_sum', 'pace_play_count'),
+                      collect.PACE_RATE_METRICS)
+
+    def test_phase3_required_columns(self):
+        for column in ('sack', 'qb_hit', 'qb_scramble', 'shotgun', 'no_huddle',
+                       'fumble', 'fumble_lost', 'cpoe', 'complete_pass',
+                       'yards_after_catch', 'xyac_mean_yardage',
+                       'penalty', 'penalty_team', 'penalty_yards',
+                       'game_seconds_remaining'):
+            self.assertIn(column, collect.REQUIRED_PBP_COLUMNS)
 
 
 if __name__ == '__main__':

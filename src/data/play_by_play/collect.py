@@ -22,12 +22,20 @@ CONTEXT_COL = 'wp_context'
 # makes PROE NaN there by the zero-denominator rule. pass_location/pass_length are
 # fully null before 2006 too (directional pass features go NaN there the same way);
 # run_location is ~95% populated on rushes in all eras, run_gap ~70% (middle runs
-# have no gap by definition).
+# have no gap by definition). Phase 3: sack/qb_hit/qb_scramble/shotgun/no_huddle/
+# fumble/fumble_lost/game_seconds_remaining are 100% populated in all eras; cpoe and
+# yards_after_catch/xyac_mean_yardage are null before 2006 (CPOE and YAC-over-expected
+# go NaN there); penalty is ~97% non-null (compare with == 1), penalty_team is always
+# set on penalty rows, penalty_yards may be NaN.
 REQUIRED_PBP_COLUMNS = [
     'posteam', 'defteam', 'season', 'week', 'season_type', 'play_id', 'game_id',
     'pass', 'rush', 'down', 'yardline_100', 'third_down_converted', 'success',
     'epa', 'wp', 'xpass', 'fixed_drive', 'fixed_drive_result',
     'yards_gained', 'run_location', 'run_gap', 'pass_location', 'pass_length',
+    'sack', 'qb_hit', 'qb_scramble', 'shotgun', 'no_huddle',
+    'fumble', 'fumble_lost', 'cpoe', 'complete_pass',
+    'yards_after_catch', 'xyac_mean_yardage',
+    'penalty', 'penalty_team', 'penalty_yards', 'game_seconds_remaining',
 ]
 
 COMPETITIVE = 'competitive'
@@ -79,6 +87,47 @@ DIRECTIONAL_RATE_METRICS = (
     + [(f'{bucket}_explosive_rate', f'{bucket}_explosive_count', f'{bucket}_attempt_count')
        for bucket in DIRECTIONAL_BUCKETS]
 )
+
+# Phase 3: trenches, turnover luck, and tendency components. Sacks/hits/scrambles are
+# per dropback, stuffs per carry, fumble-recovery luck per fumble; cpoe and
+# YAC-over-expected average only over plays where nflfastR charts them (2006+).
+PHASE3_PLAY_COMPONENT_COLUMNS = [
+    'sack_count', 'qb_hit_count', 'stuff_count',
+    'fumble_sum', 'fumble_lost_sum',
+    'scramble_count', 'shotgun_count', 'no_huddle_count',
+    'cpoe_sum', 'cpoe_play_count',
+    'yac_minus_xyac_sum', 'xyac_play_count',
+]
+
+# Penalties live partly on no-play rows outside the pass/rush universe, so they get
+# their own aggregation pass. Committed = by the offense (penalty_team == posteam);
+# drawn = by the defense against it (penalty_team == defteam). Rates are per
+# scrimmage play (play_count denominator).
+PENALTY_COMPONENT_COLUMNS = [
+    'pen_committed_count', 'pen_committed_yards_sum',
+    'pen_drawn_count', 'pen_drawn_yards_sum',
+]
+
+PHASE3_RATE_METRICS = [
+    ('sack_rate', 'sack_count', 'dropback_count'),
+    ('qb_hit_rate', 'qb_hit_count', 'dropback_count'),
+    ('scramble_rate', 'scramble_count', 'dropback_count'),
+    ('stuff_rate', 'stuff_count', 'rush_count'),
+    ('fumble_lost_rate', 'fumble_lost_sum', 'fumble_sum'),
+    ('shotgun_rate', 'shotgun_count', 'play_count'),
+    ('no_huddle_rate', 'no_huddle_count', 'play_count'),
+    ('cpoe', 'cpoe_sum', 'cpoe_play_count'),
+    ('yac_over_expected', 'yac_minus_xyac_sum', 'xyac_play_count'),
+]
+PENALTY_RATE_METRICS = [
+    ('pen_committed_rate', 'pen_committed_count', 'play_count'),
+    ('pen_committed_yards_per_play', 'pen_committed_yards_sum', 'play_count'),
+    ('pen_drawn_rate', 'pen_drawn_count', 'play_count'),
+    ('pen_drawn_yards_per_play', 'pen_drawn_yards_sum', 'play_count'),
+]
+PACE_RATE_METRICS = [
+    ('seconds_per_play', 'pace_seconds_sum', 'pace_play_count'),
+]
 
 PLAY_COMPONENT_COLUMNS = [
     'play_count', 'epa_sum', 'success_sum',
