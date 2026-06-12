@@ -141,6 +141,31 @@ class TestAggregateRedZoneComponents(unittest.TestCase):
         result = collect._aggregate_red_zone_components(plays)
         self.assertEqual(result[collect.CONTEXT_COL].iloc[0], collect.COMPETITIVE)
 
+    def test_non_scrimmage_rows_do_not_create_red_zone_trips(self):
+        # A long touchdown: scrimmage play scores from the 30, then the PAT row sits at
+        # the 15 with the same fixed_drive. The PAT must not fake a red-zone trip.
+        plays = pd.DataFrame([
+            make_play(play_id=1, fixed_drive=1, yardline_100=30.0, wp=0.5,
+                      fixed_drive_result='Touchdown', is_pass=1),
+            make_play(play_id=2, fixed_drive=1, yardline_100=15.0, wp=0.5,
+                      fixed_drive_result='Touchdown'),  # PAT: neither pass nor rush
+        ])
+        result = collect._aggregate_red_zone_components(plays)
+        self.assertTrue(result.empty)
+
+    def test_red_zone_trip_counted_once_despite_special_teams_rows(self):
+        # A genuine red-zone touchdown drive still counts exactly once when the PAT row
+        # tags along in the same fixed_drive.
+        plays = pd.DataFrame([
+            make_play(play_id=1, fixed_drive=1, yardline_100=18.0, wp=0.5,
+                      fixed_drive_result='Touchdown', is_rush=1),
+            make_play(play_id=2, fixed_drive=1, yardline_100=15.0, wp=0.5,
+                      fixed_drive_result='Touchdown'),  # PAT: neither pass nor rush
+        ])
+        result = collect._aggregate_red_zone_components(plays)
+        self.assertEqual(result['red_zone_drive_count'].sum(), 1)
+        self.assertEqual(result['red_zone_td_drive_count'].sum(), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

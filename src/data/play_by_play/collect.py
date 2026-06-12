@@ -117,12 +117,16 @@ def _aggregate_play_components(pbp_df):
 def _aggregate_red_zone_components(pbp_df):
     """
     Count red-zone trips per team-week-context at the drive level: a drive counts as a
-    red-zone trip when any of its plays starts at or inside the opponent's 20. A drive's
-    context comes from the win probability on its first play (drives can drift across
-    contexts mid-drive; the first play reflects the situation the drive started in).
+    red-zone trip when any of its scrimmage plays starts at or inside the opponent's 20.
+    Only scrimmage plays (pass or rush) are considered: PAT and kickoff rows share the
+    drive's fixed_drive number at misleading yardlines (a PAT snapped at the 15 would
+    otherwise turn every long touchdown into a fake red-zone trip). A drive's context
+    comes from the win probability on its first scrimmage play (drives can drift across
+    contexts mid-drive; the first snap reflects the situation the drive started in).
     fixed_drive numbers drives across the whole game, so (game_id, fixed_drive) is unique.
     """
-    drive_plays = pbp_df[pbp_df['fixed_drive'].notna() & pbp_df['posteam'].notna()].sort_values('play_id')
+    scrimmage = pbp_df[(pbp_df['pass'] == 1) | (pbp_df['rush'] == 1)]
+    drive_plays = scrimmage[scrimmage['fixed_drive'].notna() & scrimmage['posteam'].notna()].sort_values('play_id')
     drives = drive_plays.groupby(['game_id', 'fixed_drive'] + AGGREGATION_KEY_COLUMNS).agg(
         min_yardline_100=('yardline_100', 'min'),
         first_play_wp=('wp', 'first'),
