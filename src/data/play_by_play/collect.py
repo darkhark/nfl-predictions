@@ -23,10 +23,12 @@ CONTEXT_COL = 'wp_context'
 # fully null before 2006 too (directional pass features go NaN there the same way);
 # run_location is ~95% populated on rushes in all eras, run_gap ~70% (middle runs
 # have no gap by definition). Phase 3: sack/qb_hit/qb_scramble/shotgun/no_huddle/
-# fumble/fumble_lost/game_seconds_remaining are 100% populated in all eras; cpoe and
-# yards_after_catch/xyac_mean_yardage are null before 2006 (CPOE and YAC-over-expected
-# go NaN there); penalty is ~97% non-null (compare with == 1), penalty_team is always
-# set on penalty rows, penalty_yards may be NaN.
+# fumble/fumble_lost are 100% populated ON PASS/RUSH ROWS in all eras (NaN on ~3% of
+# no-play/timeout rows outside the scrimmage universe); game_seconds_remaining is
+# ~99.9% non-null over all rows; cpoe and yards_after_catch/xyac_mean_yardage are null
+# before 2006 (CPOE and YAC-over-expected go NaN there); penalty is ~97% non-null
+# (compare with == 1, which is False for NaN), penalty_team is always set on penalty
+# rows, penalty_yards may be NaN.
 REQUIRED_PBP_COLUMNS = [
     'posteam', 'defteam', 'season', 'week', 'season_type', 'play_id', 'game_id',
     'pass', 'rush', 'down', 'yardline_100', 'third_down_converted', 'success',
@@ -125,6 +127,8 @@ PENALTY_RATE_METRICS = [
     ('pen_drawn_rate', 'pen_drawn_count', 'play_count'),
     ('pen_drawn_yards_per_play', 'pen_drawn_yards_sum', 'play_count'),
 ]
+# pace_seconds_sum / pace_play_count are drive-level components and live in
+# DRIVE_COMPONENT_COLUMNS (wired by the drive-aggregation task), not in a PACE_* list.
 PACE_RATE_METRICS = [
     ('seconds_per_play', 'pace_seconds_sum', 'pace_play_count'),
 ]
