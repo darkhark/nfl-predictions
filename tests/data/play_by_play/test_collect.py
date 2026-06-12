@@ -380,8 +380,9 @@ class TestGetPlayByPlayFeatures(unittest.TestCase):
         features = self._features()
         feature_cols = [col for col in features.columns
                         if col.startswith('off_') or col.startswith('def_opp_')]
-        # 10 metrics x 3 contexts x 2 sides x 3 column kinds (rate, rank, rank_change)
-        self.assertEqual(len(feature_cols), 180)
+        # 36 metrics (10 aggregate + 26 directional) x 3 contexts x 2 sides
+        # x 3 column kinds (rate, rank, rank_change)
+        self.assertEqual(len(feature_cols), 648)
         self.assertEqual(list(features.columns[:3]), ['team', 'season', 'week'])
 
     def test_offense_rank_one_is_best_epa(self):
@@ -430,6 +431,88 @@ class TestDirectionalConstants(unittest.TestCase):
         for column in ('yards_gained', 'run_location', 'run_gap',
                        'pass_location', 'pass_length'):
             self.assertIn(column, collect.REQUIRED_PBP_COLUMNS)
+
+    def test_directional_lists_wired_into_aggregates(self):
+        self.assertEqual(len(collect.COMPONENT_COLUMNS), 56)
+        self.assertEqual(len(collect.RATE_METRICS), 36)
+        for bucket in collect.DIRECTIONAL_BUCKETS:
+            self.assertIn(f'{bucket}_attempt_count', collect.PLAY_COMPONENT_COLUMNS)
+
+
+class TestDirectionalComponents(unittest.TestCase):
+
+    def _aggregate(self, plays):
+        return collect._aggregate_play_components(pd.DataFrame(plays))
+
+    def test_run_bucket_assignment(self):
+        result = self._aggregate([
+            make_play(play_id=1, is_rush=1, run_location='left', run_gap='end',
+                      yards_gained=12.0, epa=0.5),
+            make_play(play_id=2, is_rush=1, run_location='middle', run_gap=None,
+                      yards_gained=3.0, epa=0.1),
+            # left run with no gap label: contributes to NO bucket
+            make_play(play_id=3, is_rush=1, run_location='left', run_gap=None,
+                      yards_gained=5.0, epa=0.2),
+            # unlabeled run: contributes to NO bucket
+            make_play(play_id=4, is_rush=1, yards_gained=4.0, epa=0.1),
+        ])
+        row = result.iloc[0]
+        self.assertEqual(row['run_left_end_attempt_count'], 1)
+        self.assertEqual(row['run_left_end_yards_sum'], 12.0)
+        self.assertEqual(row['run_left_end_explosive_count'], 1)  # 12 >= 10
+        self.assertEqual(row['run_middle_attempt_count'], 1)
+        self.assertEqual(row['run_middle_yards_sum'], 3.0)
+        self.assertEqual(row['run_middle_explosive_count'], 0)
+        # all plays still count in the aggregate universe
+        self.assertEqual(row['play_count'], 4)
+        # the two unlabeled runs landed in no bucket
+        bucket_attempts = sum(
+            row[f'{bucket}_attempt_count'] for bucket in collect.RUN_BUCKETS)
+        self.assertEqual(bucket_attempts, 2)
+
+    def test_pass_bucket_assignment(self):
+        result = self._aggregate([
+            make_play(play_id=1, is_pass=1, pass_location='right', pass_length='deep',
+                      yards_gained=25.0, epa=1.5),
+            make_play(play_id=2, is_pass=1, pass_location='middle', pass_length='short',
+                      yards_gained=19.0, epa=0.8),
+            # sack/scramble/throwaway: pass==1 but no location -> no bucket
+            make_play(play_id=3, is_pass=1, yards_gained=-7.0, epa=-1.2),
+        ])
+        row = result.iloc[0]
+        self.assertEqual(row['pass_deep_right_attempt_count'], 1)
+        self.assertEqual(row['pass_deep_right_yards_sum'], 25.0)
+        self.assertEqual(row['pass_deep_right_explosive_count'], 1)  # 25 >= 20
+        self.assertEqual(row['pass_short_middle_attempt_count'], 1)
+        self.assertEqual(row['pass_short_middle_explosive_count'], 0)  # 19 < 20
+        self.assertEqual(row['play_count'], 3)
+
+    def test_explosive_thresholds_differ_for_run_and_pass(self):
+        result = self._aggregate([
+            # 12-yard run IS explosive (>= 10)...
+            make_play(play_id=1, is_rush=1, run_location='middle',
+                      yards_gained=12.0, epa=0.5),
+            # ...but a 12-yard pass is NOT (< 20)
+            make_play(play_id=2, is_pass=1, pass_location='left', pass_length='short',
+                      yards_gained=12.0, epa=0.5),
+        ])
+        row = result.iloc[0]
+        self.assertEqual(row['run_middle_explosive_count'], 1)
+        self.assertEqual(row['pass_short_left_explosive_count'], 0)
+
+    def test_buckets_split_by_wp_context(self):
+        result = self._aggregate([
+            make_play(play_id=1, is_rush=1, run_location='middle',
+                      yards_gained=5.0, epa=0.2, wp=0.5),
+            make_play(play_id=2, is_rush=1, run_location='middle',
+                      yards_gained=30.0, epa=1.0, wp=0.97),
+        ])
+        competitive = result[result[collect.CONTEXT_COL] == collect.COMPETITIVE].iloc[0]
+        leading = result[result[collect.CONTEXT_COL] == collect.GARBAGE_LEADING].iloc[0]
+        self.assertEqual(competitive['run_middle_attempt_count'], 1)
+        self.assertEqual(competitive['run_middle_explosive_count'], 0)
+        self.assertEqual(leading['run_middle_attempt_count'], 1)
+        self.assertEqual(leading['run_middle_explosive_count'], 1)
 
 
 if __name__ == '__main__':

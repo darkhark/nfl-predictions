@@ -87,7 +87,7 @@ PLAY_COMPONENT_COLUMNS = [
     'early_down_count', 'early_down_success_sum',
     'third_down_count', 'third_down_conversion_sum',
     'xpass_play_count', 'pass_minus_xpass_sum',
-]
+] + DIRECTIONAL_COMPONENT_COLUMNS
 DRIVE_COMPONENT_COLUMNS = ['red_zone_drive_count', 'red_zone_td_drive_count']
 COMPONENT_COLUMNS = PLAY_COMPONENT_COLUMNS + DRIVE_COMPONENT_COLUMNS
 
@@ -104,7 +104,41 @@ RATE_METRICS = [
     ('third_down_conversion_rate', 'third_down_conversion_sum', 'third_down_count'),
     ('red_zone_td_rate', 'red_zone_td_drive_count', 'red_zone_drive_count'),
     ('proe', 'pass_minus_xpass_sum', 'xpass_play_count'),
-]
+] + DIRECTIONAL_RATE_METRICS
+
+
+def _assign_run_bucket(plays):
+    """
+    Label each rush with its directional bucket. Middle runs have no gap by definition;
+    left/right runs need a gap label. Unlabeled runs (NaN location, or sided runs with
+    NaN gap, ~5% and ~30% of rushes respectively) get no bucket — they still count in
+    the aggregate Phase 1 metrics, and per-bucket denominators only cover labeled runs.
+    """
+    bucket = pd.Series(None, index=plays.index, dtype='object')
+    is_rush = plays['rush'] == 1
+    bucket[is_rush & (plays['run_location'] == 'middle')] = 'run_middle'
+    sided = is_rush & plays['run_location'].isin(['left', 'right']) & plays['run_gap'].notna()
+    bucket[sided] = 'run_' + plays.loc[sided, 'run_location'] + '_' + plays.loc[sided, 'run_gap']
+    return bucket
+
+
+def _assign_pass_bucket(plays):
+    """
+    Label each located pass with its depth x direction bucket. Sacks, scrambles, and
+    throwaways carry pass == 1 with no location/length and get no bucket; before 2006
+    nflfastR has no pass charting at all, so every pass is unlabeled there and the
+    directional pass features are NaN for those seasons (like PROE/CPOE).
+    """
+    bucket = pd.Series(None, index=plays.index, dtype='object')
+    located = (
+        (plays['pass'] == 1)
+        & plays['pass_location'].notna()
+        & plays['pass_length'].notna()
+    )
+    bucket[located] = (
+        'pass_' + plays.loc[located, 'pass_length'] + '_' + plays.loc[located, 'pass_location']
+    )
+    return bucket
 
 
 def _assign_wp_context(wp):
@@ -145,6 +179,20 @@ def _aggregate_play_components(pbp_df):
     has_xpass = plays['xpass'].notna()
     plays['xpass_play_count'] = has_xpass.astype(int)
     plays['pass_minus_xpass_sum'] = (plays['pass'] - plays['xpass']).where(has_xpass, 0)
+
+    directional_bucket = _assign_run_bucket(plays)
+    directional_bucket = directional_bucket.where(directional_bucket.notna(),
+                                                  _assign_pass_bucket(plays))
+    yards = plays['yards_gained'].fillna(0)
+    is_explosive = (
+        ((plays['rush'] == 1) & (yards >= EXPLOSIVE_RUSH_YARDS))
+        | ((plays['pass'] == 1) & (yards >= EXPLOSIVE_PASS_YARDS))
+    )
+    for bucket in DIRECTIONAL_BUCKETS:
+        in_bucket = (directional_bucket == bucket).astype(int)
+        plays[f'{bucket}_attempt_count'] = in_bucket
+        plays[f'{bucket}_yards_sum'] = yards * in_bucket
+        plays[f'{bucket}_explosive_count'] = is_explosive.astype(int) * in_bucket
 
     return plays.groupby(
         AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
