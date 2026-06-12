@@ -151,6 +151,7 @@ classifier. Two **out-of-sample** metrics are tracked:
 | 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.643 | 0.599 |
 | 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | 0.618 |
 | 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** |
+| 6 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context) | 45 | _pending grid search_ | _pending grid search_ |
 
 **What changed between runs**
 
@@ -184,6 +185,20 @@ classifier. Two **out-of-sample** metrics are tracked:
   and the home-vs-away probability gap correlates with correctness much more strongly
   (r 0.07 → **0.21**; widest-gap quintile ~81% accurate). The two-season hold-out resolves
   the single-season caveat from run 4.
+- **Run 5 → 6 (in progress):** added **Phase 1 play-by-play features** (spec:
+  `docs/superpowers/specs/2026-06-12-play-by-play-features-design.md`): per-play EPA and
+  success rates (overall/pass/rush), early-down success, third-down conversion, red-zone TD
+  rate per scrimmage red-zone trip, and pass rate over expected — each split three ways by
+  win-probability context (competitive / garbage-leading / garbage-trailing) and computed as
+  season-to-date `cumsum(numerator)/cumsum(denominator)` ratios with league-wide ranks and
+  rank changes. This grew the rank-only candidate pool from ~350 to **569** columns.
+  Cross-validated RFE selected **45 features — 21 of them play-by-play ranks (12 from
+  garbage-time contexts)**, displacing many of Run 5's box-score survivors; CV ROC-AUC at
+  the selection point is 0.678 (peak 0.680 at 51 features) vs ~0.677 for the Run 5 pool.
+  Hold-out numbers await the `grid_search.ipynb` re-run, which retunes hyperparameters on
+  the new feature set before touching the 2024+2025 hold-out — those cells fill in the run-6
+  table row. PBP components are cached per season in `data/play_by_play/aggregated/`
+  (refresh with `get_play_by_play_data(years, refresh=True)` for in-progress seasons).
 
 ## Roadmap
 
