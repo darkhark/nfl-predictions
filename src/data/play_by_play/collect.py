@@ -144,3 +144,51 @@ def _aggregate_red_zone_components(pbp_df):
     return red_zone_drives.groupby(
         AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
     )[DRIVE_COMPONENT_COLUMNS].sum().reset_index()
+
+
+def _validate_required_columns(pbp_df):
+    missing = sorted(set(REQUIRED_PBP_COLUMNS) - set(pbp_df.columns))
+    if missing:
+        raise ValueError(f'Play-by-play data is missing required columns: {missing}')
+
+
+def _pivot_context_components(components):
+    """
+    Pivot the long (team-week-context) component frame wide so each component becomes
+    three columns, one per context (e.g. play_count_competitive). A context absent for a
+    team-week means zero plays happened in it, so component sums fill with 0; the
+    zero-denominator rule later turns the corresponding rates into NaN.
+    """
+    pivoted = components.pivot_table(
+        index=[TEAM_COL, SEASON_COL, WEEK_COL, SEASON_TYPE_COL, OPPONENT_TEAM_COL],
+        columns=CONTEXT_COL,
+        values=COMPONENT_COLUMNS,
+        aggfunc='sum',
+        fill_value=0,
+    )
+    pivoted.columns = [f'{component}_{context}' for component, context in pivoted.columns]
+    for component in COMPONENT_COLUMNS:
+        for context in WP_CONTEXTS:
+            column = f'{component}_{context}'
+            if column not in pivoted.columns:
+                pivoted[column] = 0
+    return pivoted.reset_index()
+
+
+def _aggregate_season(pbp_df):
+    """
+    Reduce one season of raw play-by-play to one row per team-game with component sums
+    per wp context. This is the frame that gets cached per season.
+    """
+    _validate_required_columns(pbp_df)
+    pbp_df = pbp_df[pbp_df['posteam'].notna() & pbp_df['defteam'].notna()].copy()
+    pbp_df['posteam'] = pbp_df['posteam'].replace(TEAM_ABBR_MAPPINGS)
+    pbp_df['defteam'] = pbp_df['defteam'].replace(TEAM_ABBR_MAPPINGS)
+
+    play_components = _aggregate_play_components(pbp_df)
+    drive_components = _aggregate_red_zone_components(pbp_df)
+    components = play_components.merge(
+        drive_components, on=AGGREGATION_KEY_COLUMNS + [CONTEXT_COL], how='outer'
+    ).fillna(0)
+    components = components.rename(columns={'posteam': TEAM_COL, 'defteam': OPPONENT_TEAM_COL})
+    return _pivot_context_components(components)

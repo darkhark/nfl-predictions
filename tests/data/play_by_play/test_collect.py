@@ -167,5 +167,46 @@ class TestAggregateRedZoneComponents(unittest.TestCase):
         self.assertEqual(result['red_zone_td_drive_count'].sum(), 1)
 
 
+class TestAggregateSeason(unittest.TestCase):
+
+    def setUp(self):
+        plays = pd.DataFrame([
+            # 'SD' must come out as 'LAC'; opponent 'OAK' as 'LV'
+            make_play(posteam='SD', defteam='OAK', play_id=1, is_pass=1, epa=0.5,
+                      success=1.0, wp=0.5, yardline_100=15.0, fixed_drive=1,
+                      fixed_drive_result='Touchdown'),
+            make_play(posteam='OAK', defteam='SD', play_id=2, is_rush=1, epa=-0.1,
+                      wp=0.4, fixed_drive=2),
+        ])
+        self.result = collect._aggregate_season(plays)
+
+    def test_team_abbreviations_are_normalized(self):
+        self.assertEqual(set(self.result['team']), {'LAC', 'LV'})
+        self.assertEqual(set(self.result['opp_team']), {'LAC', 'LV'})
+
+    def test_one_row_per_team_game(self):
+        self.assertEqual(len(self.result), 2)
+
+    def test_all_component_context_columns_exist_and_missing_contexts_are_zero(self):
+        for component in collect.COMPONENT_COLUMNS:
+            for context in collect.WP_CONTEXTS:
+                self.assertIn(f'{component}_{context}', self.result.columns)
+        lac = self.result[self.result['team'] == 'LAC'].iloc[0]
+        # LAC had no garbage-time plays: those component cells are 0 (no plays), not NaN
+        self.assertEqual(lac['play_count_garbage_leading'], 0)
+        self.assertEqual(lac['play_count_garbage_trailing'], 0)
+
+    def test_play_and_drive_components_land_on_the_same_row(self):
+        lac = self.result[self.result['team'] == 'LAC'].iloc[0]
+        self.assertEqual(lac['play_count_competitive'], 1)
+        self.assertEqual(lac['red_zone_drive_count_competitive'], 1)
+        self.assertEqual(lac['red_zone_td_drive_count_competitive'], 1)
+
+    def test_missing_required_column_raises(self):
+        plays = pd.DataFrame([make_play()]).drop(columns=['epa'])
+        with self.assertRaises(ValueError):
+            collect._aggregate_season(plays)
+
+
 if __name__ == '__main__':
     unittest.main()
