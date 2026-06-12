@@ -43,7 +43,7 @@ def add_rank_and_rank_change_columns(df, off_cols, def_cols):
     df = pd.concat([df, off_ranks, def_ranks], axis=1)
 
     off_rank_changes = rank_change_frame(df, list(off_ranks.columns), [TEAM_COL, SEASON_COL], TEAM_GAME_COUNT_COL)
-    def_rank_changes = _def_rank_change_frame(df, list(def_ranks.columns))
+    def_rank_changes = rank_change_frame(df, list(def_ranks.columns), [OPPONENT_TEAM_COL, SEASON_COL], OPP_GAME_COUNT_COL)
     df = pd.concat([df, off_rank_changes, def_rank_changes], axis=1)
 
     df.sort_values(by=[TEAM_COL, SEASON_COL, TEAM_GAME_COUNT_COL], inplace=True)
@@ -60,37 +60,3 @@ def rank_change_frame(df, rank_cols, groupby_columns, game_count_col):
     ordered = df.sort_values(by=groupby_columns + [game_count_col])
     changes = ordered.groupby(groupby_columns)[rank_cols].diff().fillna(0)
     return changes.add_suffix('_change')
-
-
-def _def_rank_change_frame(df, rank_cols):
-    """
-    Build a *_rank_change frame for defense rank columns.
-
-    Defense rank columns describe the opponent's (opp_team's) defense. The rank change
-    on a given row reflects how much the defending team's rank changed from its own
-    previous game. This is computed by diffing ranks per (team, season), then joining
-    back to the frame via the opp_team relationship so each row gets its opponent's
-    rank change.
-
-    :param df: frame that already contains the rank columns and team/opp_team/game-count cols
-    :param rank_cols: list of defense rank column names
-    :return: a frame of *_rank_change columns, indexed like df
-    """
-    # Compute how each team's defense rank changed from its own previous game.
-    ordered = df.sort_values(by=[TEAM_COL, SEASON_COL, TEAM_GAME_COUNT_COL])
-    changes = ordered.groupby([TEAM_COL, SEASON_COL])[rank_cols].diff().fillna(0)
-
-    lookup = ordered[[TEAM_COL, SEASON_COL, TEAM_GAME_COUNT_COL]].copy()
-    change_cols = [col + '_change' for col in rank_cols]
-    for rank_col, change_col in zip(rank_cols, change_cols):
-        lookup[change_col] = changes[rank_col].values
-
-    # Each row's opponent is opp_team; look up that team's rank change at opp_game_count.
-    result = df[[OPPONENT_TEAM_COL, SEASON_COL, OPP_GAME_COUNT_COL]].merge(
-        lookup.rename(columns={TEAM_COL: OPPONENT_TEAM_COL, TEAM_GAME_COUNT_COL: OPP_GAME_COUNT_COL}),
-        on=[OPPONENT_TEAM_COL, SEASON_COL, OPP_GAME_COUNT_COL],
-        how='left',
-    )
-    result = result[change_cols]
-    result.index = df.index
-    return result
