@@ -349,5 +349,58 @@ class TestCumulativeRateColumns(unittest.TestCase):
             collect._add_cumulative_rate_columns(components)
 
 
+class TestGetPlayByPlayFeatures(unittest.TestCase):
+
+    def _synthetic_pbp(self):
+        # Two games in one week: four teams so ranks span 1..4
+        return pd.DataFrame([
+            make_play(posteam='AAA', defteam='BBB', game_id='g1', play_id=1,
+                      is_pass=1, epa=1.0, success=1.0, wp=0.5),
+            make_play(posteam='BBB', defteam='AAA', game_id='g1', play_id=2,
+                      is_rush=1, epa=0.5, success=1.0, wp=0.5),
+            make_play(posteam='CCC', defteam='DDD', game_id='g2', play_id=1,
+                      is_pass=1, epa=-0.5, success=0.0, wp=0.5),
+            make_play(posteam='DDD', defteam='CCC', game_id='g2', play_id=2,
+                      is_rush=1, epa=-1.0, success=0.0, wp=0.5),
+        ])
+
+    def _features(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.object(collect, 'CACHE_DIR', tmp_dir), \
+                    mock.patch.object(collect.nfl, 'import_pbp_data',
+                                      return_value=self._synthetic_pbp()):
+                return collect.get_play_by_play_features([2023])
+
+    def test_feature_count_and_naming(self):
+        features = self._features()
+        feature_cols = [col for col in features.columns
+                        if col.startswith('off_') or col.startswith('def_opp_')]
+        # 10 metrics x 3 contexts x 2 sides x 3 column kinds (rate, rank, rank_change)
+        self.assertEqual(len(feature_cols), 180)
+        self.assertEqual(list(features.columns[:3]), ['team', 'season', 'week'])
+
+    def test_offense_rank_one_is_best_epa(self):
+        features = self._features()
+        rank_col = 'off_epa_per_play_competitive_cumulative_average_rank'
+        best = features[features[rank_col] == 1]
+        self.assertEqual(best['team'].values[0], 'AAA')
+        worst = features[features[rank_col] == 4]
+        self.assertEqual(worst['team'].values[0], 'DDD')
+
+    def test_defense_rank_one_allows_least_epa(self):
+        features = self._features()
+        # def_opp on a row describes that row's opponent. CCC's defense allowed DDD's
+        # -1.0 EPA/play (least allowed -> rank 1) and CCC is the opponent on DDD's row.
+        rank_col = 'def_opp_epa_per_play_competitive_cumulative_average_rank'
+        best = features[features[rank_col] == 1]
+        self.assertEqual(best['team'].values[0], 'DDD')
+
+    def test_no_component_columns_leak_into_output(self):
+        features = self._features()
+        for component in collect.COMPONENT_COLUMNS:
+            for context in collect.WP_CONTEXTS:
+                self.assertNotIn(f'{component}_{context}', features.columns)
+
+
 if __name__ == '__main__':
     unittest.main()

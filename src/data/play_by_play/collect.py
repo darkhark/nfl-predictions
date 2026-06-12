@@ -269,6 +269,33 @@ def _add_cumulative_rate_columns(df):
     return pd.concat([df, pd.DataFrame(rate_columns)], axis=1)
 
 
+def get_play_by_play_features(years, refresh=False):
+    """
+    Build the model-facing play-by-play feature frame: one row per team-game keyed by
+    (team, season, week), with cumulative rate, rank, and rank-change columns for every
+    Phase 1 metric, wp context, and side of the ball. Column naming follows the weekly
+    module's off_* / def_opp_* convention so collect_all's home/away renames, target
+    duplication, and one-week leakage shift apply to these features unchanged.
+
+    :param years: list of years to collect data for or a single year
+    :param refresh: re-download and re-aggregate even when a season cache file exists
+    :return: feature frame ready to merge onto the weekly frame
+    """
+    components = get_play_by_play_data(years, refresh=refresh).reset_index(drop=True)
+    components = _add_game_count_columns(components).reset_index(drop=True)
+    df = _add_cumulative_rate_columns(components)
+
+    off_cols = [col for col in df.columns
+                if col.startswith('off_') and col.endswith('_cumulative_average')]
+    def_cols = [col for col in df.columns
+                if col.startswith('def_opp_') and col.endswith('_cumulative_average')]
+    df = transformations.add_rank_and_rank_change_columns(df, off_cols, def_cols)
+
+    feature_cols = [col for col in df.columns
+                    if col.startswith('off_') or col.startswith('def_opp_')]
+    return df[[TEAM_COL, SEASON_COL, WEEK_COL] + feature_cols].reset_index(drop=True)
+
+
 def get_play_by_play_data(years, refresh=False):
     """
     Return team-week component sums for the specified season(s), one row per team-game.
