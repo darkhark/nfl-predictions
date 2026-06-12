@@ -155,6 +155,7 @@ metrics are tracked:
 | 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** |
 | 6 | 2026-06-12 | **BART** (`pymc-bart`), same 54 features / split as run 5 | 54 | **0.705** | **0.660** |
 | 7 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context), XGBoost | 45 | 0.696 | 0.647 |
+| 8 | 2026-06-12 | **BART** re-trained on the run-7 play-by-play feature set | 45 | 0.705 | 0.660 |
 
 **What changed between runs**
 
@@ -219,11 +220,17 @@ metrics are tracked:
   didn't move. The model is no worse and now leans on cleaner inputs (competitive-context
   rates are insulated from garbage-time stat-padding). Phase 2 (directional run/pass
   splits) targets information the box score genuinely lacks; per the phase plan, whether to
-  proceed is a judgment call given the flat Phase 1 result. Note run 7 is an **XGBoost**
-  run; the BART estimator (run 6, still the best hold-out numbers) has not yet been
-  re-trained on the play-by-play feature set — combining the two is an obvious next
-  experiment. PBP components are cached per season in `data/play_by_play/aggregated/`
-  (refresh with `get_play_by_play_data(years, refresh=True)` for in-progress seasons).
+  proceed is a judgment call given the flat Phase 1 result. PBP components are cached per
+  season in `data/play_by_play/aggregated/` (refresh with
+  `get_play_by_play_data(years, refresh=True)` for in-progress seasons).
+- **Run 7 → 8:** re-trained **BART** (same `bart.ipynb` setup as run 6: probit link, m=50,
+  4 chains, seed 32) on the run-7 45-feature play-by-play set. Hold-out came back
+  **flat vs run 6 as well: ROC-AUC 0.705 (was 0.705), accuracy 0.660 (was 0.660)**, Brier
+  0.2194 (was 0.219), log loss 0.6288 (was 0.629). Both estimators tell the same story:
+  the Phase 1 efficiency/situational metrics substantially overlap the box-score ranks
+  they replaced. The experiment cadence going forward is XGBoost first, then BART, for
+  each play-by-play phase; Phase 2 (directional run/pass splits) is information the box
+  score genuinely lacks.
 
 ## Roadmap
 
