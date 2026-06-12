@@ -23,9 +23,13 @@ CONTEXT_COL = 'wp_context'
 # fully null before 2006 too (directional pass features go NaN there the same way);
 # run_location is ~95% populated on rushes in all eras, run_gap ~70% (middle runs
 # have no gap by definition). Phase 3: sack/qb_hit/qb_scramble/shotgun/no_huddle/
-# fumble/fumble_lost are 100% populated ON PASS/RUSH ROWS in all eras (NaN on ~3% of
-# no-play/timeout rows outside the scrimmage universe); game_seconds_remaining is
-# ~99.9% non-null over all rows; cpoe and yards_after_catch/xyac_mean_yardage are null
+# fumble/fumble_lost are ~99.9% populated on universe rows in all eras (the rare NaN
+# are EPA-valued plays with nullified yardage; groupby-sum skips them so counts are
+# unaffected). CAUTION: qb_hit is zero-FILLED (not NaN) before 2006 when hit charting
+# began, so qb_hit_rate is a literal 0.0 for 2003-2005, not NaN — within-season ranks
+# are unaffected (everyone ties), but the raw rate is not comparable across that era
+# boundary. game_seconds_remaining is ~99.9% non-null over all rows; cpoe and
+# yards_after_catch/xyac_mean_yardage are null
 # before 2006 (CPOE and YAC-over-expected go NaN there); penalty is ~97% non-null
 # (compare with == 1, which is False for NaN), penalty_team is always set on penalty
 # rows, penalty_yards may be NaN.
@@ -92,7 +96,9 @@ DIRECTIONAL_RATE_METRICS = (
 
 # Phase 3: trenches, turnover luck, and tendency components. Sacks/hits/scrambles are
 # per dropback, stuffs per carry, fumble-recovery luck per fumble; cpoe and
-# YAC-over-expected average only over plays where nflfastR charts them (2006+).
+# YAC-over-expected average only over plays where nflfastR charts them (2006+ —
+# their zero denominators make the rates NaN before that). qb_hit_rate is the one
+# era asymmetry: zero-filled pre-2006, so it reads 0.0 rather than NaN there.
 PHASE3_PLAY_COMPONENT_COLUMNS = [
     'sack_count', 'qb_hit_count', 'stuff_count',
     'fumble_sum', 'fumble_lost_sum',
