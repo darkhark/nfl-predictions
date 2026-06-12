@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from unittest import mock
 
@@ -221,6 +222,40 @@ class TestAggregateSeason(unittest.TestCase):
             list(collect._aggregate_season(competitive_only).columns),
             list(collect._aggregate_season(with_garbage).columns),
         )
+
+
+class TestGetPlayByPlayDataCaching(unittest.TestCase):
+
+    def _synthetic_pbp(self):
+        return pd.DataFrame([
+            make_play(posteam='AAA', defteam='BBB', play_id=1, is_pass=1, epa=0.5, wp=0.5),
+            make_play(posteam='BBB', defteam='AAA', play_id=2, is_rush=1, epa=0.1, wp=0.5),
+        ])
+
+    def test_download_happens_once_then_cache_is_read(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.object(collect, 'CACHE_DIR', tmp_dir), \
+                    mock.patch.object(collect.nfl, 'import_pbp_data',
+                                      return_value=self._synthetic_pbp()) as import_mock:
+                first = collect.get_play_by_play_data([2023])
+                second = collect.get_play_by_play_data([2023])
+            import_mock.assert_called_once()
+            pd.testing.assert_frame_equal(
+                first.sort_index(axis=1), second.sort_index(axis=1)
+            )
+
+    def test_refresh_forces_redownload(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.object(collect, 'CACHE_DIR', tmp_dir), \
+                    mock.patch.object(collect.nfl, 'import_pbp_data',
+                                      return_value=self._synthetic_pbp()) as import_mock:
+                collect.get_play_by_play_data([2023])
+                collect.get_play_by_play_data([2023], refresh=True)
+            self.assertEqual(import_mock.call_count, 2)
+
+    def test_years_type_validation(self):
+        with self.assertRaises(TypeError):
+            collect.get_play_by_play_data('2023')
 
 
 if __name__ == '__main__':

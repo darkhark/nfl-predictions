@@ -197,3 +197,35 @@ def _aggregate_season(pbp_df):
     components[COMPONENT_COLUMNS] = components[COMPONENT_COLUMNS].fillna(0)
     components = components.rename(columns={'posteam': TEAM_COL, 'defteam': OPPONENT_TEAM_COL})
     return _pivot_context_components(components)
+
+
+def get_play_by_play_data(years, refresh=False):
+    """
+    Return team-week component sums for the specified season(s), one row per team-game.
+
+    Raw play-by-play is ~50k rows x 396 columns per season, so each season is downloaded
+    once (selecting only REQUIRED_PBP_COLUMNS), aggregated, and cached to
+    CACHE_DIR/{year}.parquet. Subsequent calls read the small aggregated frame. Pass
+    refresh=True to re-download (needed while a season is in progress).
+
+    :param years: list of years to collect data for or a single year
+    :param refresh: re-download and re-aggregate even when a cache file exists
+    :return: concatenated component frame across the requested seasons
+    """
+    if isinstance(years, int):
+        years = [years]
+    elif not isinstance(years, list):
+        raise TypeError('years must be a list or an integer')
+
+    season_frames = []
+    for year in years:
+        cache_path = os.path.join(CACHE_DIR, f'{year}.parquet')
+        if os.path.exists(cache_path) and not refresh:
+            season_frames.append(pd.read_parquet(cache_path))
+            continue
+        raw_pbp = nfl.import_pbp_data(years=[year], columns=REQUIRED_PBP_COLUMNS, downcast=False)
+        season_components = _aggregate_season(raw_pbp)
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        season_components.to_parquet(cache_path, index=False)
+        season_frames.append(season_components)
+    return pd.concat(season_frames, ignore_index=True)
