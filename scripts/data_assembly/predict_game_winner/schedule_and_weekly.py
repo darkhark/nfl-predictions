@@ -7,7 +7,7 @@ from src.data.collect_all import get_schedule_and_weekly_data
 # %%
 # In 1999 and 2002, there are a couple games with nul values in the stats.
 # TODO: Investigate why these are null
-YEARS = [year for year in range(2003, 2024)]
+YEARS = [year for year in range(2003, 2026)]
 MODULE_PATH = os.path.abspath(os.path.join('.'))
 MODEL_FEATURES_LIST_PATH = os.path.join(
     MODULE_PATH, 'data', 'predict_games', 'model_features_in', 'xgb_features_list.csv'

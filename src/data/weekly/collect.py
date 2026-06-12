@@ -1,5 +1,21 @@
-import nfl_data_py as nfl
 import pandas as pd
+
+# Weekly player stats are read from nflverse's current 'stats_player' release. nflverse's
+# stats overhaul deprecated the legacy 'player_stats' release (frozen at 2024) and dropped the
+# 'dakota' metric entirely, so it is no longer part of the feature set.
+NEW_STATS_PLAYER_URL = (
+    'https://github.com/nflverse/nflverse-data/releases/download/'
+    'stats_player/stats_player_week_{year}.parquet'
+)
+
+# The new release renamed several columns relative to the legacy one. Map them back to the
+# canonical names the rest of the pipeline (and the generated feature names) expect.
+SOURCE_COLUMN_RENAMES = {
+    'team': 'recent_team',
+    'passing_interceptions': 'interceptions',
+    'sacks_suffered': 'sacks',
+    'sack_yards_lost': 'sack_yards',
+}
 
 # There are times when passing yards != receiving yards, but it's rare so
 # we'll ignore receiving yards
@@ -10,7 +26,7 @@ ONLY_NON_IDENTIFIER_COLUMNS = [
     'passing_yards', 'passing_tds', 'interceptions', 'sacks', 'sack_yards',
     'sack_fumbles', 'sack_fumbles_lost', 'passing_air_yards',
     'passing_yards_after_catch', 'passing_first_downs', 'passing_epa',
-    'pacr', 'dakota', 'carries', 'rushing_yards',
+    'pacr', 'carries', 'rushing_yards',
     'rushing_tds', 'rushing_fumbles', 'rushing_fumbles_lost',
     'rushing_first_downs', 'rushing_epa',
     'receiving_fumbles', 'receiving_fumbles_lost',
@@ -42,7 +58,7 @@ def get_weekly_data(years):
 
     weekly_df = None
     for year in years:
-        df = nfl.import_weekly_data(years=[year], columns=ONLY_NON_IDENTIFIER_COLUMNS)
+        df = _load_weekly_year(year)
         df.rename(columns={
             'recent_team': TEAM_COL,
             'opponent_team': OPPONENT_TEAM_COL,
@@ -68,7 +84,69 @@ def get_weekly_data(years):
         else:
             weekly_df = pd.concat([weekly_df, df], ignore_index=True).reset_index(drop=True)
     weekly_df.sort_values(by=[TEAM_COL, SEASON_COL, TEAM_GAME_COUNT_COL], inplace=True)
+    weekly_df = add_rank_columns(weekly_df)
     return weekly_df
+
+
+def _load_weekly_year(year):
+    """
+    Load a single season of weekly player stats from nflverse's current 'stats_player' release,
+    mapping its column names back to the canonical names the pipeline expects.
+
+    nflverse reports sack yards in the new release as a negative 'lost' value; we restore the
+    positive convention the rest of the feature engineering was built on.
+
+    :param year: the season to load
+    :return: a dataframe with exactly ONLY_NON_IDENTIFIER_COLUMNS
+    """
+    df = pd.read_parquet(NEW_STATS_PLAYER_URL.format(year=year))
+    df = df.rename(columns=SOURCE_COLUMN_RENAMES)
+    df['sack_yards'] = df['sack_yards'].abs()
+    return df[ONLY_NON_IDENTIFIER_COLUMNS]
+
+
+def add_rank_columns(df):
+    """
+    Add cross-sectional rank and week-over-week rank-change columns for every cumulative average
+    stat, computed within each (season, week).
+
+    Offense (off_*) is ranked descending, so rank 1 is the highest value (best offense). Defense
+    (def_opp_*) is ranked ascending, so rank 1 is the fewest yards allowed (best defense). Ties
+    share the better rank (competition ranking), matching how league standings are reported.
+
+    Rank-change is the per-team change in that rank from the previous game, mirroring the grouping
+    used for the *_cumulative_average_change columns: offense ranks are diffed within
+    (team, season) and defense ranks within (opp_team, season). The first game of each group has a
+    rank-change of 0.
+
+    :param df: The concatenated weekly dataframe, after the per-year cumulative columns are built
+    :return: The dataframe with *_rank and *_rank_change columns appended
+    """
+    off_cols = [col for col in df.columns if col.startswith('off_') and col.endswith('_cumulative_average')]
+    def_cols = [col for col in df.columns if col.startswith('def_opp_') and col.endswith('_cumulative_average')]
+
+    off_ranks = df.groupby([SEASON_COL, WEEK_COL])[off_cols].rank(ascending=False, method='min').add_suffix('_rank')
+    def_ranks = df.groupby([SEASON_COL, WEEK_COL])[def_cols].rank(ascending=True, method='min').add_suffix('_rank')
+    df = pd.concat([df, off_ranks, def_ranks], axis=1)
+
+    off_rank_changes = _rank_change_frame(df, list(off_ranks.columns), [TEAM_COL, SEASON_COL], TEAM_GAME_COUNT_COL)
+    def_rank_changes = _rank_change_frame(df, list(def_ranks.columns), [OPPONENT_TEAM_COL, SEASON_COL], OPP_GAME_COUNT_COL)
+    df = pd.concat([df, off_rank_changes, def_rank_changes], axis=1)
+
+    df.sort_values(by=[TEAM_COL, SEASON_COL, TEAM_GAME_COUNT_COL], inplace=True)
+    return df
+
+
+def _rank_change_frame(df, rank_cols, groupby_columns, game_count_col):
+    """
+    Build a *_rank_change frame for each rank column, computed as the change from the entity's
+    previous game. The entity is whatever groupby_columns identifies (the team for offense ranks,
+    the opponent for defense ranks). The first game of each group is filled with 0. The returned
+    frame is indexed like df so it can be concatenated back on.
+    """
+    ordered = df.sort_values(by=groupby_columns + [game_count_col])
+    changes = ordered.groupby(groupby_columns)[rank_cols].diff().fillna(0)
+    return changes.add_suffix('_change')
 
 
 def create_cumulative_columns(df, groupby_columns, column_prefix, game_count_col, swap_team_and_opponent=False):

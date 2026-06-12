@@ -13,6 +13,24 @@ AWAY_DEF_CUM_AVG_SCORE = 'away_def_cumulative_avg_points_allowed'
 HOME_DEF_CUM_AVG_SCORE = 'home_def_cumulative_avg_points_allowed'
 AWAY_DEF_CUM_AVG_SCORE_CHANGE = 'away_def_cumulative_avg_points_allowed_change'
 HOME_DEF_CUM_AVG_SCORE_CHANGE = 'home_def_cumulative_avg_points_allowed_change'
+HOME_OFF_CUM_AVG_SCORE = 'home_off_cumulative_avg_score'
+HOME_OFF_SCORE_RANK = 'home_off_cumulative_avg_score_rank'
+AWAY_OFF_SCORE_RANK = 'away_off_cumulative_avg_score_rank'
+HOME_OFF_SCORE_RANK_CHANGE = 'home_off_cumulative_avg_score_rank_change'
+AWAY_OFF_SCORE_RANK_CHANGE = 'away_off_cumulative_avg_score_rank_change'
+HOME_DEF_PA_RANK = 'home_def_cumulative_avg_points_allowed_rank'
+AWAY_DEF_PA_RANK = 'away_def_cumulative_avg_points_allowed_rank'
+
+
+def _stack_team_values(df, value_col):
+    """Build a per-team (team, value, rank) frame for one (season, week) slice from the
+    wide home/away schedule rows."""
+    import pandas as pd
+    home = df[[HOME_TEAM, value_col.replace('away_', 'home_'), value_col.replace('away_', 'home_') + '_rank']].copy()
+    home.columns = ['team', 'value', 'rank']
+    away = df[[AWAY_TEAM, value_col.replace('home_', 'away_'), value_col.replace('home_', 'away_') + '_rank']].copy()
+    away.columns = ['team', 'value', 'rank']
+    return pd.concat([home, away], ignore_index=True)
 
 
 class MyTestCase(unittest.TestCase):
@@ -117,6 +135,45 @@ class MyTestCase(unittest.TestCase):
         la_rams_week_1 = la_rams[la_rams[WEEK] == 1]
         lar_week_1_cumulative_score_change = la_rams_week_1[AWAY_OFF_CUM_AVG_SCORE_CHANGE].values[0]
         self.assertEqual(lar_week_1_cumulative_score_change, 0)
+
+    def test_offense_points_rank_one_holds_the_max_cumulative_average(self):
+        week_ten = self.schedule_data[
+            (self.schedule_data[WEEK] == 10) & (self.schedule_data[SEASON] == 2023)
+        ]
+        teams = _stack_team_values(week_ten, HOME_OFF_CUM_AVG_SCORE)
+        rank_one = teams[teams['rank'] == 1]
+        self.assertFalse(rank_one.empty)
+        for value in rank_one['value']:
+            self.assertEqual(value, teams['value'].max())
+
+    def test_defense_points_allowed_rank_one_holds_the_min_cumulative_average(self):
+        week_ten = self.schedule_data[
+            (self.schedule_data[WEEK] == 10) & (self.schedule_data[SEASON] == 2023)
+        ]
+        teams = _stack_team_values(week_ten, HOME_DEF_CUM_AVG_SCORE)
+        rank_one = teams[teams['rank'] == 1]
+        self.assertFalse(rank_one.empty)
+        for value in rank_one['value']:
+            self.assertEqual(value, teams['value'].min())
+
+    def test_offense_points_rank_change_equals_consecutive_week_diff(self):
+        la_rams = self.schedule_data[
+            ((self.schedule_data[HOME_TEAM] == 'LA') | (self.schedule_data[AWAY_TEAM] == 'LA')) &
+            (self.schedule_data[SEASON] == 2023)
+        ].sort_values(WEEK)
+        previous_rank = None
+        for _, row in la_rams.iterrows():
+            is_home = row[HOME_TEAM] == 'LA'
+            rank = row[HOME_OFF_SCORE_RANK] if is_home else row[AWAY_OFF_SCORE_RANK]
+            change = row[HOME_OFF_SCORE_RANK_CHANGE] if is_home else row[AWAY_OFF_SCORE_RANK_CHANGE]
+            if previous_rank is None:
+                self.assertEqual(change, 0)
+            else:
+                self.assertEqual(change, rank - previous_rank)
+            previous_rank = rank
+
+    def test_schedule_data_has_a_single_week_column(self):
+        self.assertEqual(list(self.schedule_data.columns).count(WEEK), 1)
 
     def test_indoor_is_accurate(self):
         la_rams = self.schedule_data[self.schedule_data[HOME_TEAM] == 'LA']
