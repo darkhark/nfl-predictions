@@ -1046,6 +1046,18 @@ class TestCumulativeRateColumns(unittest.TestCase):
             for context in collect.WP_CONTEXTS:
                 self.assertIn(f'off_{metric}_{context}_cumulative_average', self.result.columns)
                 self.assertIn(f'def_opp_{metric}_{context}_cumulative_average', self.result.columns)
+
+    def test_non_unique_index_is_rejected(self):
+        # A duplicated index would silently scramble def_opp values during the
+        # index-aligned concat; the guard must fail fast instead.
+        components = pd.DataFrame([
+            make_component_row('AAA', 'BBB', week=1),
+            make_component_row('BBB', 'AAA', week=1),
+        ])
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        components.index = [0, 0]
+        with self.assertRaises(ValueError):
+            collect._add_cumulative_rate_columns(components)
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -1064,6 +1076,7 @@ def _add_game_count_columns(df):
     reliable divisor because of byes, so cumulative math orders and groups by these
     counters, mirroring the weekly module.
     """
+    df = df.copy()
     df.sort_values(by=[TEAM_COL, SEASON_COL, WEEK_COL], inplace=True)
     df[TEAM_GAME_COUNT_COL] = df.groupby([TEAM_COL, SEASON_COL]).cumcount() + 1
     df.sort_values(by=[OPPONENT_TEAM_COL, SEASON_COL, WEEK_COL], inplace=True)
@@ -1089,6 +1102,11 @@ def _add_cumulative_rate_columns(df):
 
     Requires a unique index (reset_index before calling) and game-count columns.
     """
+    if not df.index.is_unique:
+        raise ValueError(
+            'cumulative rate computation requires a unique index; call reset_index first '
+            '(a duplicated index silently scrambles def_opp values during realignment)'
+        )
     component_cols = [f'{component}_{context}'
                       for component in COMPONENT_COLUMNS for context in WP_CONTEXTS]
 
