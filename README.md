@@ -5,7 +5,7 @@ NFL data ([nflverse](https://github.com/nflverse) via
 [`nfl_data_py`](https://github.com/nflverse/nfl_data_py)). The project covers the full
 modeling lifecycle — data collection, leakage-aware feature engineering, feature
 selection, hyperparameter tuning, probability calibration, and model evaluation — using
-XGBoost, with Bayesian approaches planned.
+XGBoost, plus a Bayesian BART comparison model (`pymc-bart`).
 
 It is a personal project built to apply production data-science methodology (the same
 approach I use professionally — custom recursive feature elimination, cross-validation,
@@ -87,8 +87,8 @@ src/data/                      # nfl_data_py collection + merge/feature logic
   collect_all.py               # orchestration (schedule + weekly assembled)
 data_science_utilities/        # reusable XGBoost RFE, search, calibration, anomaly tools
 scripts/data_assembly/         # builds and saves the model-ready dataset
-notebooks/model_training/      # RFE, cross-validation, and grid-search experiments
-models/                        # serialized best XGBoost models (JSON)
+notebooks/model_training/      # RFE, cross-validation, grid-search, and BART experiments
+models/                        # serialized best XGBoost models (JSON) + BART hold-out predictions
 data/predict_games/            # input parquet + selected-feature lists
 tests/data/                    # unit tests for the data/feature pipeline
 ```
@@ -126,7 +126,8 @@ defense-matches-opposing-offense invariant, and bye-week edge cases.
 Runs 1–4 evaluate on a single **2023 hold-out season**; run 5 moves to a **two-season
 2024+2025 hold-out** (every prior season is used for train/validation). Cross-validated RFE
 selects the feature set, then a randomized hyperparameter search tunes the XGBoost
-classifier. Two **out-of-sample** metrics are tracked:
+classifier; run 6 swaps the estimator for BART on the same inputs. Two **out-of-sample**
+metrics are tracked:
 
 - **Hold-out ROC-AUC** — ROC-AUC over all hold-out rows pooled (both target/opp
   perspectives). Reported as the per-week mean, which matches the single pooled curve to
@@ -151,6 +152,7 @@ classifier. Two **out-of-sample** metrics are tracked:
 | 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.643 | 0.599 |
 | 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | 0.618 |
 | 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** |
+| 6 | 2026-06-12 | **BART** (`pymc-bart`), same 54 features / split as run 5 | 54 | **0.705** | **0.660** |
 
 **What changed between runs**
 
@@ -184,11 +186,25 @@ classifier. Two **out-of-sample** metrics are tracked:
   and the home-vs-away probability gap correlates with correctness much more strongly
   (r 0.07 → **0.21**; widest-gap quintile ~81% accurate). The two-season hold-out resolves
   the single-season caveat from run 4.
+- **Run 5 → 6:** swapped the estimator — **Bayesian Additive Regression Trees** (probit-link
+  BART via `pymc-bart`, m=50 trees, 4 chains) on the *identical* inputs as run 5: same
+  parquet, same seed-32 shuffle, same 54 RFE-selected features, same train `<2022` /
+  2024+2025 hold-out split (the 2022–2023 slice, which XGBoost used for early stopping, is
+  reported as a pure validation check — BART needs no early stopping). Pooled hold-out
+  ROC-AUC edged up to **0.705** and accuracy to **0.660**, with better residual metrics
+  (Brier 0.219, log loss 0.629) and *under*confident rather than overconfident buckets.
+  The Bayesian payoff: posterior uncertainty is informative — picks in the
+  narrowest-posterior quartile hit **~79%** vs ~59% in the widest. Note the PGBART sampler
+  reports high r-hat / low ESS on some latent `mu` dimensions (common for BART latents);
+  posterior-mean *predictions* are stable across reruns (hold-out AUROC 0.702 with 2 chains
+  vs 0.705 with 4). See `cross_validation/bart.ipynb`; hold-out predictions (mean +
+  posterior std per row) are saved to `models/bart_holdout_preds.csv`.
 
 ## Roadmap
 
 - Improve predictive performance toward / past a Vegas-implied baseline.
 - Finish play-by-play and Next Gen Stats integration at the weekly grain.
-- Add Bayesian models for comparison and uncertainty quantification.
+- Extend the Bayesian comparison (BART baseline done — run 6): more chains/draws, prior
+  sensitivity, and using posterior uncertainty for bet-sizing-style decision rules.
 - Address known `TODO`s: prevent season-average leakage in the NGS diff features, and move
   notebook-style execution out of `next_gen_stats/collect.py` import path.
