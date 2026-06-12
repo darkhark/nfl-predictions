@@ -313,8 +313,10 @@ def make_play(posteam='AAA', defteam='BBB', season=2023, week=1, season_type='RE
         'season_type': season_type, 'play_id': play_id, 'game_id': game_id,
         'pass': is_pass, 'rush': is_rush, 'down': down, 'yardline_100': yardline_100,
         'third_down_converted': third_down_converted, 'success': success, 'epa': epa,
-        'wp': wp, 'xpass': xpass, 'fixed_drive': fixed_drive,
-        'fixed_drive_result': fixed_drive_result,
+        # float('nan') rather than None so the xpass column is float64 like real
+        # nflfastR data, not object dtype
+        'wp': wp, 'xpass': float('nan') if xpass is None else xpass,
+        'fixed_drive': fixed_drive, 'fixed_drive_result': fixed_drive_result,
     }
 
 
@@ -760,6 +762,19 @@ class TestAggregateSeason(unittest.TestCase):
         plays = pd.DataFrame([make_play()]).drop(columns=['epa'])
         with self.assertRaises(ValueError):
             collect._aggregate_season(plays)
+
+    def test_column_order_is_deterministic_across_context_presence(self):
+        # pivot_table's column order depends on which contexts appear in the data; the
+        # per-season parquet caches must share one schema regardless.
+        competitive_only = pd.DataFrame([make_play(is_pass=1, epa=0.1, wp=0.5)])
+        with_garbage = pd.DataFrame([
+            make_play(play_id=1, is_pass=1, epa=0.1, wp=0.5),
+            make_play(play_id=2, is_rush=1, epa=0.2, wp=0.97),
+        ])
+        self.assertEqual(
+            list(collect._aggregate_season(competitive_only).columns),
+            list(collect._aggregate_season(with_garbage).columns),
+        )
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -793,11 +808,13 @@ def _pivot_context_components(components):
         fill_value=0,
     )
     pivoted.columns = [f'{component}_{context}' for component, context in pivoted.columns]
-    for component in COMPONENT_COLUMNS:
-        for context in WP_CONTEXTS:
-            column = f'{component}_{context}'
-            if column not in pivoted.columns:
-                pivoted[column] = 0
+    # Reindex to a canonical column order: pivot_table's output order depends on which
+    # contexts appear in the data, and the per-season parquet caches must share one
+    # schema. reindex also backfills any component/context column absent from the data
+    # (zero plays in that context).
+    ordered_columns = [f'{component}_{context}'
+                       for component in COMPONENT_COLUMNS for context in WP_CONTEXTS]
+    pivoted = pivoted.reindex(columns=ordered_columns, fill_value=0)
     return pivoted.reset_index()
 
 
@@ -815,7 +832,10 @@ def _aggregate_season(pbp_df):
     drive_components = _aggregate_red_zone_components(pbp_df)
     components = play_components.merge(
         drive_components, on=AGGREGATION_KEY_COLUMNS + [CONTEXT_COL], how='outer'
-    ).fillna(0)
+    )
+    # Fill only the component columns: a side missing from the outer merge means zero
+    # plays/drives, and restricting the fill keeps pandas from object-downcasting keys.
+    components[COMPONENT_COLUMNS] = components[COMPONENT_COLUMNS].fillna(0)
     components = components.rename(columns={'posteam': TEAM_COL, 'defteam': OPPONENT_TEAM_COL})
     return _pivot_context_components(components)
 ```
