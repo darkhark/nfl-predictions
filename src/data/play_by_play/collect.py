@@ -81,3 +81,34 @@ def _assign_wp_context(wp):
     context[wp > GARBAGE_WP_THRESHOLD] = GARBAGE_LEADING
     context[wp < GARBAGE_WP_LOWER_THRESHOLD] = GARBAGE_TRAILING
     return context
+
+
+def _aggregate_play_components(pbp_df):
+    """
+    Aggregate the offensive play universe (pass or rush plays with an EPA value) to
+    component sums per team-week-context. Components are numerator/denominator building
+    blocks; rates are only ever computed from season-to-date component sums.
+    """
+    plays = pbp_df[((pbp_df['pass'] == 1) | (pbp_df['rush'] == 1)) & pbp_df['epa'].notna()].copy()
+    plays[CONTEXT_COL] = _assign_wp_context(plays['wp'])
+
+    plays['play_count'] = 1
+    plays['epa_sum'] = plays['epa']
+    plays['success_sum'] = plays['success']
+    plays['dropback_count'] = plays['pass']
+    plays['dropback_epa_sum'] = plays['epa'] * plays['pass']
+    plays['dropback_success_sum'] = plays['success'] * plays['pass']
+    plays['rush_count'] = plays['rush']
+    plays['rush_epa_sum'] = plays['epa'] * plays['rush']
+    plays['rush_success_sum'] = plays['success'] * plays['rush']
+    plays['early_down_count'] = plays['down'].isin([1, 2]).astype(int)
+    plays['early_down_success_sum'] = plays['early_down_count'] * plays['success']
+    plays['third_down_count'] = (plays['down'] == 3).astype(int)
+    plays['third_down_conversion_sum'] = plays['third_down_converted'].fillna(0)
+    has_xpass = plays['xpass'].notna()
+    plays['xpass_play_count'] = has_xpass.astype(int)
+    plays['pass_minus_xpass_sum'] = (plays['pass'] - plays['xpass']).where(has_xpass, 0)
+
+    return plays.groupby(
+        AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
+    )[PLAY_COMPONENT_COLUMNS].sum().reset_index()

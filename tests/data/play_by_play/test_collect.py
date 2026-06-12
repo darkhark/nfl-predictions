@@ -40,5 +40,61 @@ class TestAssignWpContext(unittest.TestCase):
         self.assertEqual(list(result), expected)
 
 
+class TestAggregatePlayComponents(unittest.TestCase):
+
+    def setUp(self):
+        plays = pd.DataFrame([
+            # competitive: one successful pass, one failed rush (both early downs)
+            make_play(play_id=1, is_pass=1, down=1, success=1.0, epa=0.5, wp=0.5, xpass=0.6),
+            make_play(play_id=2, is_rush=1, down=2, success=0.0, epa=-0.2, wp=0.5, xpass=0.3),
+            # garbage_leading: converted third-down pass, no xpass value
+            make_play(play_id=3, is_pass=1, down=3, third_down_converted=1.0,
+                      success=1.0, epa=1.0, wp=0.96, xpass=None),
+            # not a pass or rush play (e.g. kickoff): must be excluded entirely
+            make_play(play_id=4, is_pass=0, is_rush=0, epa=2.0, wp=0.5),
+        ])
+        self.result = collect._aggregate_play_components(plays)
+
+    def _row(self, context):
+        return self.result[self.result[collect.CONTEXT_COL] == context].iloc[0]
+
+    def test_competitive_components(self):
+        row = self._row(collect.COMPETITIVE)
+        self.assertEqual(row['play_count'], 2)
+        self.assertAlmostEqual(row['epa_sum'], 0.3)
+        self.assertEqual(row['success_sum'], 1)
+        self.assertEqual(row['dropback_count'], 1)
+        self.assertAlmostEqual(row['dropback_epa_sum'], 0.5)
+        self.assertEqual(row['dropback_success_sum'], 1)
+        self.assertEqual(row['rush_count'], 1)
+        self.assertAlmostEqual(row['rush_epa_sum'], -0.2)
+        self.assertEqual(row['rush_success_sum'], 0)
+        self.assertEqual(row['early_down_count'], 2)
+        self.assertEqual(row['early_down_success_sum'], 1)
+        self.assertEqual(row['third_down_count'], 0)
+        self.assertEqual(row['third_down_conversion_sum'], 0)
+        self.assertEqual(row['xpass_play_count'], 2)
+        # (1 - 0.6) + (0 - 0.3) = 0.1
+        self.assertAlmostEqual(row['pass_minus_xpass_sum'], 0.1)
+
+    def test_garbage_leading_components(self):
+        row = self._row(collect.GARBAGE_LEADING)
+        self.assertEqual(row['play_count'], 1)
+        self.assertEqual(row['third_down_count'], 1)
+        self.assertEqual(row['third_down_conversion_sum'], 1)
+        # xpass was NaN: play contributes to neither PROE component
+        self.assertEqual(row['xpass_play_count'], 0)
+        self.assertEqual(row['pass_minus_xpass_sum'], 0)
+
+    def test_non_pass_rush_plays_are_excluded(self):
+        self.assertEqual(self.result['play_count'].sum(), 3)
+
+    def test_grain_is_team_week_context(self):
+        expected_keys = collect.AGGREGATION_KEY_COLUMNS + [collect.CONTEXT_COL]
+        for key in expected_keys:
+            self.assertIn(key, self.result.columns)
+        self.assertFalse(self.result.duplicated(subset=expected_keys).any())
+
+
 if __name__ == '__main__':
     unittest.main()
