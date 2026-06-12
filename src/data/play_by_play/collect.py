@@ -208,6 +208,7 @@ def _add_game_count_columns(df):
     reliable divisor because of byes, so cumulative math orders and groups by these
     counters, mirroring the weekly module.
     """
+    df = df.copy()
     df.sort_values(by=[TEAM_COL, SEASON_COL, WEEK_COL], inplace=True)
     df[TEAM_GAME_COUNT_COL] = df.groupby([TEAM_COL, SEASON_COL]).cumcount() + 1
     df.sort_values(by=[OPPONENT_TEAM_COL, SEASON_COL, WEEK_COL], inplace=True)
@@ -233,6 +234,11 @@ def _add_cumulative_rate_columns(df):
 
     Requires a unique index (reset_index before calling) and game-count columns.
     """
+    if not df.index.is_unique:
+        raise ValueError(
+            'cumulative rate computation requires a unique index; call reset_index first '
+            '(a duplicated index silently scrambles def_opp values during realignment)'
+        )
     component_cols = [f'{component}_{context}'
                       for component in COMPONENT_COLUMNS for context in WP_CONTEXTS]
 

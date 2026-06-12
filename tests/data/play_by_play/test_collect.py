@@ -336,6 +336,18 @@ class TestCumulativeRateColumns(unittest.TestCase):
                 self.assertIn(f'off_{metric}_{context}_cumulative_average', self.result.columns)
                 self.assertIn(f'def_opp_{metric}_{context}_cumulative_average', self.result.columns)
 
+    def test_non_unique_index_is_rejected(self):
+        # A duplicated index would silently scramble def_opp values during the
+        # index-aligned concat; the guard must fail fast instead.
+        components = pd.DataFrame([
+            make_component_row('AAA', 'BBB', week=1),
+            make_component_row('BBB', 'AAA', week=1),
+        ])
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        components.index = [0, 0]
+        with self.assertRaises(ValueError):
+            collect._add_cumulative_rate_columns(components)
+
 
 if __name__ == '__main__':
     unittest.main()
