@@ -148,7 +148,7 @@ PLAY_COMPONENT_COLUMNS = [
     'xpass_play_count', 'pass_minus_xpass_sum',
 ] + DIRECTIONAL_COMPONENT_COLUMNS + PHASE3_PLAY_COMPONENT_COLUMNS
 DRIVE_COMPONENT_COLUMNS = ['red_zone_drive_count', 'red_zone_td_drive_count']
-COMPONENT_COLUMNS = PLAY_COMPONENT_COLUMNS + DRIVE_COMPONENT_COLUMNS
+COMPONENT_COLUMNS = PLAY_COMPONENT_COLUMNS + DRIVE_COMPONENT_COLUMNS + PENALTY_COMPONENT_COLUMNS
 
 # (metric_name, numerator_component, denominator_component). Cumulative rates are always
 # cumsum(numerator) / cumsum(denominator) so sparse weeks accumulate correctly.
@@ -163,7 +163,7 @@ RATE_METRICS = [
     ('third_down_conversion_rate', 'third_down_conversion_sum', 'third_down_count'),
     ('red_zone_td_rate', 'red_zone_td_drive_count', 'red_zone_drive_count'),
     ('proe', 'pass_minus_xpass_sum', 'xpass_play_count'),
-] + DIRECTIONAL_RATE_METRICS + PHASE3_RATE_METRICS
+] + DIRECTIONAL_RATE_METRICS + PHASE3_RATE_METRICS + PENALTY_RATE_METRICS
 
 
 def _assign_run_bucket(plays):
@@ -316,6 +316,35 @@ def _aggregate_red_zone_components(pbp_df):
     )[DRIVE_COMPONENT_COLUMNS].sum().reset_index()
 
 
+def _aggregate_penalty_components(pbp_df):
+    """
+    Count penalties per team-week-context over ALL rows with teams attached: accepted
+    penalties frequently live on no-play rows outside the pass/rush universe, so this is
+    a separate aggregation pass (like drives). Committed = flagged on the offense
+    (penalty_team == posteam); drawn = flagged on the defense (penalty_team == defteam).
+    The matching rates use scrimmage play_count as the denominator, so they read as
+    "penalties per offensive snap". NaN penalty values compare False and are ignored.
+    """
+    penalties = pbp_df[
+        (pbp_df['penalty'] == 1)
+        & pbp_df['posteam'].notna()
+        & pbp_df['defteam'].notna()
+    ].copy()
+    penalties[CONTEXT_COL] = _assign_wp_context(penalties['wp'])
+
+    committed = penalties['penalty_team'] == penalties['posteam']
+    drawn = penalties['penalty_team'] == penalties['defteam']
+    yards = penalties['penalty_yards'].fillna(0)
+    penalties['pen_committed_count'] = committed.astype(int)
+    penalties['pen_committed_yards_sum'] = yards * committed
+    penalties['pen_drawn_count'] = drawn.astype(int)
+    penalties['pen_drawn_yards_sum'] = yards * drawn
+
+    return penalties.groupby(
+        AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
+    )[PENALTY_COMPONENT_COLUMNS].sum().reset_index()
+
+
 def _validate_required_columns(pbp_df):
     missing = sorted(set(REQUIRED_PBP_COLUMNS) - set(pbp_df.columns))
     if missing:
@@ -359,11 +388,15 @@ def _aggregate_season(pbp_df):
 
     play_components = _aggregate_play_components(pbp_df)
     drive_components = _aggregate_red_zone_components(pbp_df)
+    penalty_components = _aggregate_penalty_components(pbp_df)
     components = play_components.merge(
         drive_components, on=AGGREGATION_KEY_COLUMNS + [CONTEXT_COL], how='outer'
+    ).merge(
+        penalty_components, on=AGGREGATION_KEY_COLUMNS + [CONTEXT_COL], how='outer'
     )
     # Fill only the component columns: a side missing from the outer merge means zero
-    # plays/drives, and restricting the fill keeps pandas from object-downcasting keys.
+    # plays/drives/penalties, and restricting the fill keeps pandas from
+    # object-downcasting keys.
     components[COMPONENT_COLUMNS] = components[COMPONENT_COLUMNS].fillna(0)
     components = components.rename(columns={'posteam': TEAM_COL, 'defteam': OPPONENT_TEAM_COL})
     return _pivot_context_components(components)

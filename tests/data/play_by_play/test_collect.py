@@ -394,9 +394,8 @@ class TestGetPlayByPlayFeatures(unittest.TestCase):
         features = self._features()
         feature_cols = [col for col in features.columns
                         if col.startswith('off_') or col.startswith('def_opp_')]
-        # 45 metrics (10 aggregate + 26 directional + 9 phase-3 play) x 3 contexts
-        # x 2 sides x 3 column kinds (rate, rank, rank_change)
-        self.assertEqual(len(feature_cols), 810)
+        # 49 metrics (10 aggregate + 26 directional + 9 phase-3 play + 4 penalty) x 3 x 2 x 3
+        self.assertEqual(len(feature_cols), 882)
         self.assertEqual(list(features.columns[:3]), ['team', 'season', 'week'])
 
     def test_offense_rank_one_is_best_epa(self):
@@ -447,9 +446,9 @@ class TestDirectionalConstants(unittest.TestCase):
             self.assertIn(column, collect.REQUIRED_PBP_COLUMNS)
 
     def test_directional_lists_wired_into_aggregates(self):
-        # 56 directional+aggregate + 12 phase-3 play = 68; RATE_METRICS 36 + 9 = 45
-        self.assertEqual(len(collect.COMPONENT_COLUMNS), 68)
-        self.assertEqual(len(collect.RATE_METRICS), 45)
+        # 56 directional+aggregate + 12 phase-3 play + 4 penalty = 72; RATE_METRICS 36 + 9 + 4 = 49
+        self.assertEqual(len(collect.COMPONENT_COLUMNS), 72)
+        self.assertEqual(len(collect.RATE_METRICS), 49)
         for bucket in collect.DIRECTIONAL_BUCKETS:
             self.assertIn(f'{bucket}_attempt_count', collect.PLAY_COMPONENT_COLUMNS)
 
@@ -632,6 +631,45 @@ class TestPhase3PlayComponents(unittest.TestCase):
             make_play(play_id=1, is_rush=1, yards_gained=float('nan'), epa=0.0),
         ])
         self.assertEqual(result.iloc[0]['stuff_count'], 0)
+
+
+class TestPenaltyComponents(unittest.TestCase):
+
+    def test_committed_and_drawn_split_by_penalty_team(self):
+        plays = pd.DataFrame([
+            # offense (AAA) commits a 10-yard penalty on a scrimmage play
+            make_play(play_id=1, is_pass=1, epa=-0.5, penalty=1.0,
+                      penalty_team='AAA', penalty_yards=10.0),
+            # defense (BBB) commits a 5-yard penalty on a no-play row
+            # (pass == rush == 0: outside the scrimmage universe, must still count)
+            make_play(play_id=2, penalty=1.0, penalty_team='BBB', penalty_yards=5.0),
+            # clean play
+            make_play(play_id=3, is_rush=1, epa=0.1),
+        ])
+        result = collect._aggregate_penalty_components(plays)
+        row = result.iloc[0]
+        self.assertEqual(row['pen_committed_count'], 1)
+        self.assertEqual(row['pen_committed_yards_sum'], 10.0)
+        self.assertEqual(row['pen_drawn_count'], 1)
+        self.assertEqual(row['pen_drawn_yards_sum'], 5.0)
+
+    def test_nan_penalty_rows_are_not_penalties(self):
+        plays = pd.DataFrame([
+            make_play(play_id=1, is_pass=1, epa=0.1, penalty=float('nan')),
+        ])
+        result = collect._aggregate_penalty_components(plays)
+        self.assertTrue(result.empty)
+
+    def test_penalty_components_reach_the_season_frame(self):
+        plays = pd.DataFrame([
+            make_play(play_id=1, is_pass=1, epa=0.2),
+            make_play(play_id=2, penalty=1.0, penalty_team='AAA', penalty_yards=15.0),
+        ])
+        season = collect._aggregate_season(plays)
+        row = season[season['team'] == 'AAA'].iloc[0]
+        self.assertEqual(row['pen_committed_count_competitive'], 1)
+        self.assertEqual(row['pen_committed_yards_sum_competitive'], 15.0)
+        self.assertEqual(row['play_count_competitive'], 1)
 
 
 if __name__ == '__main__':
