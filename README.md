@@ -134,6 +134,15 @@ metrics are tracked:
   perspectives). Reported as the per-week mean, which matches the single pooled curve to
   within ~0.002.
 - **Hold-out accuracy** — `best_model.score` on the hold-out rows at a 0.5 threshold.
+  Treat as descriptive only: with 544 hold-out games the 95% binomial interval is
+  roughly ±4 points, so run-to-run differences of a point or two are mostly noise, and a
+  monotone recalibration can move it without changing ROC-AUC at all.
+- **Hold-out Brier** — mean squared error of the predicted probabilities over the pooled
+  hold-out rows (a proper scoring rule: uniquely minimized by reporting true
+  probabilities, so it rewards calibration and sharpness together; lower is better).
+  Reference points on the 2024+2025 hold-out: 0.25 = coin flip, **0.2495** = always
+  predicting the training-era home-win rate (56.2%). Tracked from run 5 (the earlier
+  models were not retained, and runs 1–4 used a different hold-out anyway).
 
 > **In-sample vs out-of-sample.** For runs 1–4 the grid-search *cross-validated* ROC-AUC
 > (~0.677) was measured on the training seasons and ran ~0.03 above the 2023 hold-out
@@ -146,16 +155,18 @@ metrics are tracked:
 > "when the model is confident, how good is it?", see the calibration / confidence-bucket /
 > home-vs-away-gap cells in `cross_validation/grid_search.ipynb`.)
 
-| # | Date | Feature selection | Features | Hold-out ROC-AUC | Hold-out acc |
-| --- | --- | --- | ---: | ---: | ---: |
-| 1 | 2024-07-23 | RFE (single split) | 28 | 0.629 | 0.597 |
-| 2 | 2024-08-06 | Cross-validated RFE (`StratifiedKFold`) | 34 | 0.643 | 0.597 |
-| 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.643 | 0.599 |
-| 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | 0.618 |
-| 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** |
-| 6 | 2026-06-12 | **BART** (`pymc-bart`), same 54 features / split as run 5 | 54 | **0.705** | **0.660** |
-| 7 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context), XGBoost | 45 | 0.696 | 0.647 |
-| 8 | 2026-06-12 | **BART** re-trained on the run-7 play-by-play feature set | 45 | 0.705 | 0.660 |
+| # | Date | Feature selection | Features | Hold-out ROC-AUC | Hold-out acc | Hold-out Brier |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| 1 | 2024-07-23 | RFE (single split) | 28 | 0.629 | 0.597 | — |
+| 2 | 2024-08-06 | Cross-validated RFE (`StratifiedKFold`) | 34 | 0.643 | 0.597 | — |
+| 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.643 | 0.599 | — |
+| 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | 0.618 | — |
+| 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** | 0.2218 |
+| 6 | 2026-06-12 | **BART** (`pymc-bart`), same 54 features / split as run 5 | 54 | **0.705** | **0.660** | 0.2194 |
+| 7 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context), XGBoost | 45 | 0.696 | 0.647 | 0.2206 |
+| 8 | 2026-06-12 | **BART** re-trained on the run-7 play-by-play feature set (corrected — see run 8 note) | 45 | 0.702 | 0.656 | 0.2199 |
+| 9 | 2026-06-12 | Rank-only + **Phase 2 directional run/pass features**, XGBoost | 57 | 0.694 | 0.645 | 0.2291 |
+| 10 | 2026-06-12 | **BART** on the run-9 directional feature set | 57 | **0.708** | 0.654 | **0.2185** |
 
 **What changed between runs**
 
@@ -224,20 +235,62 @@ metrics are tracked:
   season in `data/play_by_play/aggregated/` (refresh with
   `get_play_by_play_data(years, refresh=True)` for in-progress seasons).
 - **Run 7 → 8:** re-trained **BART** (same `bart.ipynb` setup as run 6: probit link, m=50,
-  4 chains, seed 32) on the run-7 45-feature play-by-play set. Hold-out came back
-  **flat vs run 6 as well: ROC-AUC 0.705 (was 0.705), accuracy 0.660 (was 0.660)**, Brier
-  0.2194 (was 0.219), log loss 0.6288 (was 0.629). Both estimators tell the same story:
-  the Phase 1 efficiency/situational metrics substantially overlap the box-score ranks
-  they replaced. The experiment cadence going forward is XGBoost first, then BART, for
-  each play-by-play phase; Phase 2 (directional run/pass splits) is information the box
-  score genuinely lacks.
+  4 chains, seed 32) on the run-7 45-feature play-by-play set. Corrected result (see the
+  run 8 correction note below for why the originally published numbers were invalid):
+  hold-out ROC-AUC **0.702**, accuracy **0.656**, Brier 0.2199 — slightly below run 6,
+  telling the same story as XGBoost: the Phase 1 efficiency/situational metrics
+  substantially overlap the box-score ranks they replaced. The experiment cadence going
+  forward is XGBoost first, then BART, for each play-by-play phase.
+- **Run 8 → 9:** added **Phase 2 directional features** — average yards and explosive-play
+  rate (rush ≥ 10, pass ≥ 20) for 7 run buckets (`run_location` × `run_gap`) and 6 pass
+  buckets (`pass_location` × `pass_length`), per wp context, off and def (936 candidate
+  columns; rank-only pool grew 569 → 1,193). Era note: nflfastR has no pass charting
+  before 2006, so directional pass features are NaN for 2003–2005 (run direction works in
+  all eras). RFE selected **57 features — 35 play-by-play (22 directional, 13 of those
+  about what defenses allow by direction)** and CV ROC-AUC peaked at **0.685** (highest of
+  any pool; 0.681 at the 57-feature selection point). The hold-out stayed flat once more:
+  pooled ROC-AUC **0.694**, accuracy **0.645** (vs 0.697/0.647 run 5, 0.696/0.647 run 7).
+  Pattern across runs 5/7/9: XGBoost hold-out skill is insensitive to which of these
+  correlated rank families it consumes — selection composition changes, aggregate skill
+  doesn't. Run 9's Brier (0.2291, backfilled) is also the worst of the two-season-hold-out
+  runs: this XGBoost model ranks games as well as its predecessors but its probabilities
+  are noticeably less calibrated — every BART run beats every XGBoost run on Brier.
+- **Run 8 correction:** the originally published run-8 numbers (0.705/0.660, identical to
+  run 6) were **invalid** — `pymc-bart` raises on NaN inputs (sparse wp-context ranks have
+  NaN early in seasons), the headless notebook execution failed, and the stale run-6
+  outputs left in the notebook were mistakenly recorded as fresh results. `bart.ipynb`
+  now fills NaN with an out-of-range sentinel (`BART_NAN_SENTINEL = -100`, letting the
+  trees isolate the "no data yet" region the way XGBoost routes missing values) and
+  asserts no NaN reaches the sampler. The corrected run 8: hold-out ROC-AUC **0.702**,
+  accuracy **0.656**, Brier 0.2199 — slightly *below* run 6, consistent with the flat
+  XGBoost result on the same features.
+- **Run 9 → 10:** BART on the 57-feature directional set, with the NaN sentinel.
+  **Hold-out ROC-AUC 0.708 — the best of any run** (0.705 run 6), with the best
+  probability quality too (Brier **0.2185**, log loss **0.6267**) and validation ROC-AUC
+  up 0.655 → 0.668. Accuracy at the 0.5 threshold dipped to 0.654 (0.660 run 6) — a
+  threshold-sensitive metric at odds with the improved Brier/log-loss, suggesting a
+  calibration pass could recover it. Posterior uncertainty remains informative:
+  narrowest-posterior-quartile picks hit **77%**, and the width-stratified Brier
+  (new cell in `bart.ipynb`) is strictly monotone — **0.171 / 0.220 / 0.234 / 0.246**
+  from narrowest to widest posterior quartile, i.e. the narrow-posterior games carry
+  most of the model's skill while the widest quartile is essentially the no-skill
+  baseline (0.2495). Net: the directional features are the first addition to move the
+  champion estimator — modestly, but in ranking AND probability quality simultaneously —
+  where XGBoost stayed flat (run 9).
+  > Sampler-variability note: PGBART's multiprocess sampling is not bit-reproducible
+  > even with a fixed seed. A verification re-run of the identical notebook landed at
+  > ROC-AUC 0.712 / accuracy 0.661 / Brier 0.2177 (vs the recorded 0.708 / 0.654 /
+  > 0.2185) — treat BART numbers as carrying roughly ±0.004 run-to-run wobble. Both
+  > executions beat run 6 on ROC-AUC and Brier, so the directional improvement is
+  > robust to sampler noise; the table keeps the first recorded execution.
 
 ## Roadmap
 
 - Improve predictive performance toward / past a Vegas-implied baseline.
-- Play-by-play Phases 2–3 (directional run/pass splits; trenches, turnover luck,
-  tendencies — see the phase plan in `docs/superpowers/specs/`) and Next Gen Stats
-  integration at the weekly grain; re-train BART on the play-by-play feature set.
+- Play-by-play Phase 3 (trenches, turnover luck, tendencies — see the spec in
+  `docs/superpowers/specs/` and phase plans in `docs/superpowers/plans/`) and Next Gen
+  Stats integration at the weekly grain; calibration pass on the run-10 BART champion
+  (best AUROC/Brier but 0.5-threshold accuracy lags — calibration may recover it).
 - Extend the Bayesian comparison (BART baseline done — run 6): more chains/draws, prior
   sensitivity, and using posterior uncertainty for bet-sizing-style decision rules.
 - Address known `TODO`s: prevent season-average leakage in the NGS diff features, and move

@@ -19,9 +19,13 @@ schedule_and_weekly_df.head()
 
 # %%
 TARGET = 'target_win'
+# 'season' is excluded as a candidate feature: hold-out seasons lie outside the training
+# range, so tree splits on it can only encode era drift, never anything that generalizes
+# forward. It stays in the parquet for the time-based train/hold-out splits. 'week' stays
+# a candidate (in-range, can carry real late-season effects); RFE decides its fate.
 EXCLUDE_COLUMNS_LIST = [
     'game_id', 'opp_team', 'opp_score', 'target_team', 'target_score', 'season_type',
-    'h_win'
+    'h_win', 'season'
 ]
 
 # %%
