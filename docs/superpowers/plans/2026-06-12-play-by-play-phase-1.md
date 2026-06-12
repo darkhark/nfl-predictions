@@ -363,7 +363,10 @@ from src.data.transformations import (
     TEAM_GAME_COUNT_COL, OPP_GAME_COUNT_COL,
 )
 
-CACHE_DIR = os.path.join('data', 'play_by_play', 'aggregated')
+# Anchored to the repo root via this file's location so notebook callers (whose CWD is
+# the notebook's directory) read and write the same cache as scripts run from the root.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+CACHE_DIR = os.path.join(_REPO_ROOT, 'data', 'play_by_play', 'aggregated')
 
 SEASON_TYPE_COL = 'season_type'
 CONTEXT_COL = 'wp_context'

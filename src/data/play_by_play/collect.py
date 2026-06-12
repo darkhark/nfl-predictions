@@ -9,7 +9,10 @@ from src.data.transformations import (
     TEAM_GAME_COUNT_COL, OPP_GAME_COUNT_COL,
 )
 
-CACHE_DIR = os.path.join('data', 'play_by_play', 'aggregated')
+# Anchored to the repo root via this file's location so notebook callers (whose CWD is
+# the notebook's directory) read and write the same cache as scripts run from the root.
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+CACHE_DIR = os.path.join(_REPO_ROOT, 'data', 'play_by_play', 'aggregated')
 
 SEASON_TYPE_COL = 'season_type'
 CONTEXT_COL = 'wp_context'
@@ -206,7 +209,8 @@ def get_play_by_play_data(years, refresh=False):
     Raw play-by-play is ~50k rows x 396 columns per season, so each season is downloaded
     once (selecting only REQUIRED_PBP_COLUMNS), aggregated, and cached to
     CACHE_DIR/{year}.parquet. Subsequent calls read the small aggregated frame. Pass
-    refresh=True to re-download (needed while a season is in progress).
+    refresh=True to re-download — needed while a season is in progress, and after any
+    code change that alters the cached schema (cached files are read back verbatim).
 
     :param years: list of years to collect data for or a single year
     :param refresh: re-download and re-aggregate even when a cache file exists
