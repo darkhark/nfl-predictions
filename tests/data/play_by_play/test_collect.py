@@ -394,9 +394,9 @@ class TestGetPlayByPlayFeatures(unittest.TestCase):
         features = self._features()
         feature_cols = [col for col in features.columns
                         if col.startswith('off_') or col.startswith('def_opp_')]
-        # 36 metrics (10 aggregate + 26 directional) x 3 contexts x 2 sides
-        # x 3 column kinds (rate, rank, rank_change)
-        self.assertEqual(len(feature_cols), 648)
+        # 45 metrics (10 aggregate + 26 directional + 9 phase-3 play) x 3 contexts
+        # x 2 sides x 3 column kinds (rate, rank, rank_change)
+        self.assertEqual(len(feature_cols), 810)
         self.assertEqual(list(features.columns[:3]), ['team', 'season', 'week'])
 
     def test_offense_rank_one_is_best_epa(self):
@@ -447,8 +447,9 @@ class TestDirectionalConstants(unittest.TestCase):
             self.assertIn(column, collect.REQUIRED_PBP_COLUMNS)
 
     def test_directional_lists_wired_into_aggregates(self):
-        self.assertEqual(len(collect.COMPONENT_COLUMNS), 56)
-        self.assertEqual(len(collect.RATE_METRICS), 36)
+        # 56 directional+aggregate + 12 phase-3 play = 68; RATE_METRICS 36 + 9 = 45
+        self.assertEqual(len(collect.COMPONENT_COLUMNS), 68)
+        self.assertEqual(len(collect.RATE_METRICS), 45)
         for bucket in collect.DIRECTIONAL_BUCKETS:
             self.assertIn(f'{bucket}_attempt_count', collect.PLAY_COMPONENT_COLUMNS)
 
@@ -562,6 +563,75 @@ class TestPhase3Constants(unittest.TestCase):
                        'penalty', 'penalty_team', 'penalty_yards',
                        'game_seconds_remaining'):
             self.assertIn(column, collect.REQUIRED_PBP_COLUMNS)
+
+
+class TestPhase3PlayComponents(unittest.TestCase):
+
+    def _aggregate(self, plays):
+        return collect._aggregate_play_components(pd.DataFrame(plays))
+
+    def test_trench_components(self):
+        result = self._aggregate([
+            # a sack: pass play, negative yards, qb hit
+            make_play(play_id=1, is_pass=1, sack=1.0, qb_hit=1.0, yards_gained=-7.0,
+                      epa=-1.5),
+            # a clean completed pass
+            make_play(play_id=2, is_pass=1, complete_pass=1.0, yards_gained=12.0,
+                      epa=0.8),
+            # a stuffed run (0 yards counts as stuffed)
+            make_play(play_id=3, is_rush=1, yards_gained=0.0, epa=-0.4),
+            # a healthy run
+            make_play(play_id=4, is_rush=1, yards_gained=6.0, epa=0.3),
+        ])
+        row = result.iloc[0]
+        self.assertEqual(row['sack_count'], 1)
+        self.assertEqual(row['qb_hit_count'], 1)
+        self.assertEqual(row['stuff_count'], 1)
+        self.assertEqual(row['dropback_count'], 2)
+        self.assertEqual(row['rush_count'], 2)
+
+    def test_fumble_luck_components(self):
+        result = self._aggregate([
+            make_play(play_id=1, is_rush=1, fumble=1.0, fumble_lost=1.0, epa=-2.0),
+            make_play(play_id=2, is_rush=1, fumble=1.0, fumble_lost=0.0, epa=-0.5),
+            make_play(play_id=3, is_rush=1, epa=0.1),
+        ])
+        row = result.iloc[0]
+        self.assertEqual(row['fumble_sum'], 2)
+        self.assertEqual(row['fumble_lost_sum'], 1)
+
+    def test_tendency_components(self):
+        result = self._aggregate([
+            make_play(play_id=1, is_pass=1, shotgun=1.0, no_huddle=1.0,
+                      qb_scramble=1.0, epa=0.2),
+            make_play(play_id=2, is_rush=1, shotgun=1.0, epa=0.1),
+        ])
+        row = result.iloc[0]
+        self.assertEqual(row['scramble_count'], 1)
+        self.assertEqual(row['shotgun_count'], 2)
+        self.assertEqual(row['no_huddle_count'], 1)
+
+    def test_cpoe_and_yac_skip_uncharted_plays(self):
+        result = self._aggregate([
+            # charted completion: cpoe 5.0, yac 8 vs expected 5.5 -> +2.5
+            make_play(play_id=1, is_pass=1, cpoe=5.0, complete_pass=1.0,
+                      yards_after_catch=8.0, xyac_mean_yardage=5.5, epa=0.6),
+            # pre-2006-style pass: no cpoe, no xyac -> contributes to neither metric
+            make_play(play_id=2, is_pass=1, complete_pass=1.0,
+                      yards_after_catch=4.0, epa=0.2),
+        ])
+        row = result.iloc[0]
+        self.assertEqual(row['cpoe_play_count'], 1)
+        self.assertAlmostEqual(row['cpoe_sum'], 5.0)
+        self.assertEqual(row['xyac_play_count'], 1)
+        self.assertAlmostEqual(row['yac_minus_xyac_sum'], 2.5)
+
+    def test_stuff_requires_known_yardage(self):
+        # NaN yards_gained must not count as a stuff
+        result = self._aggregate([
+            make_play(play_id=1, is_rush=1, yards_gained=float('nan'), epa=0.0),
+        ])
+        self.assertEqual(result.iloc[0]['stuff_count'], 0)
 
 
 if __name__ == '__main__':

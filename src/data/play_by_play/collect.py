@@ -140,7 +140,7 @@ PLAY_COMPONENT_COLUMNS = [
     'early_down_count', 'early_down_success_sum',
     'third_down_count', 'third_down_conversion_sum',
     'xpass_play_count', 'pass_minus_xpass_sum',
-] + DIRECTIONAL_COMPONENT_COLUMNS
+] + DIRECTIONAL_COMPONENT_COLUMNS + PHASE3_PLAY_COMPONENT_COLUMNS
 DRIVE_COMPONENT_COLUMNS = ['red_zone_drive_count', 'red_zone_td_drive_count']
 COMPONENT_COLUMNS = PLAY_COMPONENT_COLUMNS + DRIVE_COMPONENT_COLUMNS
 
@@ -157,7 +157,7 @@ RATE_METRICS = [
     ('third_down_conversion_rate', 'third_down_conversion_sum', 'third_down_count'),
     ('red_zone_td_rate', 'red_zone_td_drive_count', 'red_zone_drive_count'),
     ('proe', 'pass_minus_xpass_sum', 'xpass_play_count'),
-] + DIRECTIONAL_RATE_METRICS
+] + DIRECTIONAL_RATE_METRICS + PHASE3_RATE_METRICS
 
 
 def _assign_run_bucket(plays):
@@ -249,6 +249,29 @@ def _aggregate_play_components(pbp_df):
         plays[f'{bucket}_attempt_count'] = in_bucket
         plays[f'{bucket}_yards_sum'] = yards * in_bucket
         plays[f'{bucket}_explosive_count'] = is_explosive.astype(int) * in_bucket
+
+    plays['sack_count'] = plays['sack']
+    plays['qb_hit_count'] = plays['qb_hit']
+    # NaN yards_gained must not count as a stuff: the raw column comparison is False
+    # for NaN, unlike the zero-filled `yards` used for explosives above.
+    plays['stuff_count'] = ((plays['rush'] == 1) & (plays['yards_gained'] <= 0)).astype(int)
+    plays['fumble_sum'] = plays['fumble']
+    plays['fumble_lost_sum'] = plays['fumble_lost']
+    plays['scramble_count'] = plays['qb_scramble']
+    plays['shotgun_count'] = plays['shotgun']
+    plays['no_huddle_count'] = plays['no_huddle']
+    has_cpoe = plays['cpoe'].notna()
+    plays['cpoe_play_count'] = has_cpoe.astype(int)
+    plays['cpoe_sum'] = plays['cpoe'].where(has_cpoe, 0)
+    has_xyac = (
+        (plays['complete_pass'] == 1)
+        & plays['xyac_mean_yardage'].notna()
+        & plays['yards_after_catch'].notna()
+    )
+    plays['xyac_play_count'] = has_xyac.astype(int)
+    plays['yac_minus_xyac_sum'] = (
+        plays['yards_after_catch'] - plays['xyac_mean_yardage']
+    ).where(has_xyac, 0)
 
     return plays.groupby(
         AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
