@@ -19,11 +19,15 @@ CONTEXT_COL = 'wp_context'
 
 # Verified present for every season 2003-2025. epa/wp/success/fixed_drive are fully
 # populated on pass/rush plays back to 2003; xpass is fully null before 2006, which
-# makes PROE NaN there by the zero-denominator rule.
+# makes PROE NaN there by the zero-denominator rule. pass_location/pass_length are
+# fully null before 2006 too (directional pass features go NaN there the same way);
+# run_location is ~95% populated on rushes in all eras, run_gap ~70% (middle runs
+# have no gap by definition).
 REQUIRED_PBP_COLUMNS = [
     'posteam', 'defteam', 'season', 'week', 'season_type', 'play_id', 'game_id',
     'pass', 'rush', 'down', 'yardline_100', 'third_down_converted', 'success',
     'epa', 'wp', 'xpass', 'fixed_drive', 'fixed_drive_result',
+    'yards_gained', 'run_location', 'run_gap', 'pass_location', 'pass_length',
 ]
 
 COMPETITIVE = 'competitive'
@@ -45,6 +49,36 @@ DEFENSE_CONTEXT_SWAP = {
 }
 
 AGGREGATION_KEY_COLUMNS = ['posteam', 'season', 'week', 'season_type', 'defteam']
+
+# Phase 2: directional buckets. Runs split by run_location x run_gap (middle has no
+# gap by definition); passes by pass_length x pass_location. Plays with unlabeled
+# direction contribute to no bucket (they remain in the aggregate Phase 1 metrics);
+# per-bucket denominators are bucket attempt counts, so rates cover labeled plays only.
+RUN_BUCKETS = [
+    'run_left_end', 'run_left_tackle', 'run_left_guard', 'run_middle',
+    'run_right_guard', 'run_right_tackle', 'run_right_end',
+]
+PASS_BUCKETS = [
+    'pass_short_left', 'pass_short_middle', 'pass_short_right',
+    'pass_deep_left', 'pass_deep_middle', 'pass_deep_right',
+]
+DIRECTIONAL_BUCKETS = RUN_BUCKETS + PASS_BUCKETS
+
+EXPLOSIVE_RUSH_YARDS = 10
+EXPLOSIVE_PASS_YARDS = 20
+
+DIRECTIONAL_COMPONENT_COLUMNS = [
+    f'{bucket}_{component}'
+    for bucket in DIRECTIONAL_BUCKETS
+    for component in ('attempt_count', 'yards_sum', 'explosive_count')
+]
+
+DIRECTIONAL_RATE_METRICS = (
+    [(f'{bucket}_yards_per_attempt', f'{bucket}_yards_sum', f'{bucket}_attempt_count')
+     for bucket in DIRECTIONAL_BUCKETS]
+    + [(f'{bucket}_explosive_rate', f'{bucket}_explosive_count', f'{bucket}_attempt_count')
+       for bucket in DIRECTIONAL_BUCKETS]
+)
 
 PLAY_COMPONENT_COLUMNS = [
     'play_count', 'epa_sum', 'success_sum',

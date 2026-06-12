@@ -10,7 +10,9 @@ from src.data.play_by_play import collect
 def make_play(posteam='AAA', defteam='BBB', season=2023, week=1, season_type='REG',
               play_id=1, game_id='2023_01_AAA_BBB', is_pass=0, is_rush=0,
               down=1, yardline_100=75.0, third_down_converted=0.0, success=0.0,
-              epa=0.0, wp=0.5, xpass=None, fixed_drive=1, fixed_drive_result='Punt'):
+              epa=0.0, wp=0.5, xpass=None, fixed_drive=1, fixed_drive_result='Punt',
+              yards_gained=0.0, run_location=None, run_gap=None,
+              pass_location=None, pass_length=None):
     """One synthetic nflfastR play row. 'pass'/'rush' are reserved words as kwargs,
     hence is_pass/is_rush."""
     return {
@@ -22,6 +24,9 @@ def make_play(posteam='AAA', defteam='BBB', season=2023, week=1, season_type='RE
         # nflfastR data, not object dtype
         'wp': wp, 'xpass': float('nan') if xpass is None else xpass,
         'fixed_drive': fixed_drive, 'fixed_drive_result': fixed_drive_result,
+        'yards_gained': yards_gained, 'run_location': run_location,
+        'run_gap': run_gap, 'pass_location': pass_location,
+        'pass_length': pass_length,
     }
 
 
@@ -400,6 +405,31 @@ class TestGetPlayByPlayFeatures(unittest.TestCase):
         for component in collect.COMPONENT_COLUMNS:
             for context in collect.WP_CONTEXTS:
                 self.assertNotIn(f'{component}_{context}', features.columns)
+
+
+class TestDirectionalConstants(unittest.TestCase):
+
+    def test_thirteen_buckets(self):
+        self.assertEqual(len(collect.RUN_BUCKETS), 7)
+        self.assertEqual(len(collect.PASS_BUCKETS), 6)
+        self.assertEqual(
+            collect.DIRECTIONAL_BUCKETS, collect.RUN_BUCKETS + collect.PASS_BUCKETS)
+
+    def test_directional_generated_lists(self):
+        # 3 components per bucket and 2 metrics per bucket, generated from the
+        # bucket lists; wired into the aggregate lists in the next task
+        self.assertEqual(len(collect.DIRECTIONAL_COMPONENT_COLUMNS), 39)
+        self.assertEqual(len(collect.DIRECTIONAL_RATE_METRICS), 26)
+        self.assertIn('run_left_end_attempt_count', collect.DIRECTIONAL_COMPONENT_COLUMNS)
+        self.assertIn(
+            ('pass_deep_right_explosive_rate', 'pass_deep_right_explosive_count',
+             'pass_deep_right_attempt_count'),
+            collect.DIRECTIONAL_RATE_METRICS)
+
+    def test_directional_required_columns(self):
+        for column in ('yards_gained', 'run_location', 'run_gap',
+                       'pass_location', 'pass_length'):
+            self.assertIn(column, collect.REQUIRED_PBP_COLUMNS)
 
 
 if __name__ == '__main__':
