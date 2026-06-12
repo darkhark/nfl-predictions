@@ -37,7 +37,7 @@ Data is pulled from [nflverse](https://github.com/nflverse). Schedules come thro
 | Schedules | `src/data/schedule/collect.py` | Game results, rest days, roof type, optional Vegas lines (`nfl_data_py`) |
 | Weekly stats | `src/data/weekly/collect.py` | Team-aggregated offensive/defensive box-score stats (nflverse `stats_player` release) |
 | Next Gen Stats | `src/data/next_gen_stats/collect.py` | Passing / rushing / receiving advanced metrics |
-| Play-by-play | `src/data/play_by_play/collect.py` | Scaffolded for future week-level aggregation |
+| Play-by-play | `src/data/play_by_play/collect.py` | Per-play EPA/success/situational metrics aggregated to team-week, split by win-probability context, cached per season |
 
 ## Feature engineering
 
@@ -126,7 +126,8 @@ defense-matches-opposing-offense invariant, and bye-week edge cases.
 Runs 1–4 evaluate on a single **2023 hold-out season**; run 5 moves to a **two-season
 2024+2025 hold-out** (every prior season is used for train/validation). Cross-validated RFE
 selects the feature set, then a randomized hyperparameter search tunes the XGBoost
-classifier; run 6 swaps the estimator for BART on the same inputs. Two **out-of-sample**
+classifier; run 6 swaps the estimator for BART on the same inputs; run 7 returns to
+XGBoost on a candidate pool expanded with play-by-play features. Two **out-of-sample**
 metrics are tracked:
 
 - **Hold-out ROC-AUC** — ROC-AUC over all hold-out rows pooled (both target/opp
@@ -153,6 +154,7 @@ metrics are tracked:
 | 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | 0.618 |
 | 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** |
 | 6 | 2026-06-12 | **BART** (`pymc-bart`), same 54 features / split as run 5 | 54 | **0.705** | **0.660** |
+| 7 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context), XGBoost | 45 | 0.696 | 0.647 |
 
 **What changed between runs**
 
@@ -199,11 +201,36 @@ metrics are tracked:
   posterior-mean *predictions* are stable across reruns (hold-out AUROC 0.702 with 2 chains
   vs 0.705 with 4). See `cross_validation/bart.ipynb`; unlike XGBoost there is no compact
   serialized model artifact, but the seeded notebook re-trains in ~75 s.
+- **Run 6 → 7:** added **Phase 1 play-by-play features** (spec:
+  `docs/superpowers/specs/2026-06-12-play-by-play-features-design.md`): per-play EPA and
+  success rates (overall/pass/rush), early-down success, third-down conversion, red-zone TD
+  rate per scrimmage red-zone trip, and pass rate over expected — each split three ways by
+  win-probability context (competitive / garbage-leading / garbage-trailing) and computed as
+  season-to-date `cumsum(numerator)/cumsum(denominator)` ratios with league-wide ranks and
+  rank changes. This grew the rank-only candidate pool from ~350 to **569** columns.
+  Cross-validated RFE selected **45 features — 21 of them play-by-play ranks (12 from
+  garbage-time contexts)**, displacing many of Run 5's box-score survivors; CV ROC-AUC at
+  the selection point is 0.678 (peak 0.680 at 51 features) vs ~0.677 for the Run 5 pool.
+  After re-tuning (`grid_search.ipynb`, `BEST_NUM_FEATS = 45`), the 2024+2025 hold-out came
+  back **flat vs Run 5: pooled ROC-AUC 0.696 (was 0.697), accuracy 0.647 (was 0.647)**.
+  Interpretation: the pbp efficiency metrics carry real signal — RFE prefers them
+  head-to-head against box-score ranks — but at the team-week-rank level that signal
+  substantially **overlaps** what yards/EPA box totals already encoded, so aggregate skill
+  didn't move. The model is no worse and now leans on cleaner inputs (competitive-context
+  rates are insulated from garbage-time stat-padding). Phase 2 (directional run/pass
+  splits) targets information the box score genuinely lacks; per the phase plan, whether to
+  proceed is a judgment call given the flat Phase 1 result. Note run 7 is an **XGBoost**
+  run; the BART estimator (run 6, still the best hold-out numbers) has not yet been
+  re-trained on the play-by-play feature set — combining the two is an obvious next
+  experiment. PBP components are cached per season in `data/play_by_play/aggregated/`
+  (refresh with `get_play_by_play_data(years, refresh=True)` for in-progress seasons).
 
 ## Roadmap
 
 - Improve predictive performance toward / past a Vegas-implied baseline.
-- Finish play-by-play and Next Gen Stats integration at the weekly grain.
+- Play-by-play Phases 2–3 (directional run/pass splits; trenches, turnover luck,
+  tendencies — see the phase plan in `docs/superpowers/specs/`) and Next Gen Stats
+  integration at the weekly grain; re-train BART on the play-by-play feature set.
 - Extend the Bayesian comparison (BART baseline done — run 6): more chains/draws, prior
   sensitivity, and using posterior uncertainty for bet-sizing-style decision rules.
 - Address known `TODO`s: prevent season-average leakage in the NGS diff features, and move
