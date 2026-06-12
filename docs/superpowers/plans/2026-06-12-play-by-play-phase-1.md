@@ -628,6 +628,31 @@ class TestAggregateRedZoneComponents(unittest.TestCase):
         ])
         result = collect._aggregate_red_zone_components(plays)
         self.assertEqual(result[collect.CONTEXT_COL].iloc[0], collect.COMPETITIVE)
+
+    def test_non_scrimmage_rows_do_not_create_red_zone_trips(self):
+        # A long touchdown: scrimmage play scores from the 30, then the PAT row sits at
+        # the 15 with the same fixed_drive. The PAT must not fake a red-zone trip.
+        plays = pd.DataFrame([
+            make_play(play_id=1, fixed_drive=1, yardline_100=30.0, wp=0.5,
+                      fixed_drive_result='Touchdown', is_pass=1),
+            make_play(play_id=2, fixed_drive=1, yardline_100=15.0, wp=0.5,
+                      fixed_drive_result='Touchdown'),  # PAT: neither pass nor rush
+        ])
+        result = collect._aggregate_red_zone_components(plays)
+        self.assertTrue(result.empty)
+
+    def test_red_zone_trip_counted_once_despite_special_teams_rows(self):
+        # A genuine red-zone touchdown drive still counts exactly once when the PAT row
+        # tags along in the same fixed_drive.
+        plays = pd.DataFrame([
+            make_play(play_id=1, fixed_drive=1, yardline_100=18.0, wp=0.5,
+                      fixed_drive_result='Touchdown', is_rush=1),
+            make_play(play_id=2, fixed_drive=1, yardline_100=15.0, wp=0.5,
+                      fixed_drive_result='Touchdown'),  # PAT: neither pass nor rush
+        ])
+        result = collect._aggregate_red_zone_components(plays)
+        self.assertEqual(result['red_zone_drive_count'].sum(), 1)
+        self.assertEqual(result['red_zone_td_drive_count'].sum(), 1)
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -643,12 +668,16 @@ Append to `src/data/play_by_play/collect.py`:
 def _aggregate_red_zone_components(pbp_df):
     """
     Count red-zone trips per team-week-context at the drive level: a drive counts as a
-    red-zone trip when any of its plays starts at or inside the opponent's 20. A drive's
-    context comes from the win probability on its first play (drives can drift across
-    contexts mid-drive; the first play reflects the situation the drive started in).
+    red-zone trip when any of its scrimmage plays starts at or inside the opponent's 20.
+    Only scrimmage plays (pass or rush) are considered: PAT and kickoff rows share the
+    drive's fixed_drive number at misleading yardlines (a PAT snapped at the 15 would
+    otherwise turn every long touchdown into a fake red-zone trip). A drive's context
+    comes from the win probability on its first scrimmage play (drives can drift across
+    contexts mid-drive; the first snap reflects the situation the drive started in).
     fixed_drive numbers drives across the whole game, so (game_id, fixed_drive) is unique.
     """
-    drive_plays = pbp_df[pbp_df['fixed_drive'].notna() & pbp_df['posteam'].notna()].sort_values('play_id')
+    scrimmage = pbp_df[(pbp_df['pass'] == 1) | (pbp_df['rush'] == 1)]
+    drive_plays = scrimmage[scrimmage['fixed_drive'].notna() & scrimmage['posteam'].notna()].sort_values('play_id')
     drives = drive_plays.groupby(['game_id', 'fixed_drive'] + AGGREGATION_KEY_COLUMNS).agg(
         min_yardline_100=('yardline_100', 'min'),
         first_play_wp=('wp', 'first'),

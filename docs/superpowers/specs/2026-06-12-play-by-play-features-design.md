@@ -116,7 +116,9 @@ garbage_trailing), for offense and defense.
 - Success rate (overall, pass, rush) — `success` column (EPA > 0)
 - Early-down (1st/2nd) success rate
 - Third-down conversion rate
-- Red-zone TD rate, per red-zone drive (drives reaching `yardline_100 <= 20`)
+- Red-zone TD rate, per red-zone drive (drives where a **scrimmage** play starts at
+  `yardline_100 <= 20`; PAT/kickoff rows share the drive id at misleading yardlines and
+  must be excluded, else every long touchdown fakes a red-zone trip)
 - PROE: mean of `qb_dropback - xpass`
 
 ### Phase 2 — directional (original motivating idea, ~600 candidates)
