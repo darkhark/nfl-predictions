@@ -88,7 +88,7 @@ src/data/                      # nfl_data_py collection + merge/feature logic
 data_science_utilities/        # reusable XGBoost RFE, search, calibration, anomaly tools
 scripts/data_assembly/         # builds and saves the model-ready dataset
 notebooks/model_training/      # RFE, cross-validation, grid-search, and BART experiments
-models/                        # serialized best XGBoost models (JSON) + BART hold-out predictions
+models/                        # serialized best XGBoost models (JSON)
 data/predict_games/            # input parquet + selected-feature lists
 tests/data/                    # unit tests for the data/feature pipeline
 ```
@@ -197,8 +197,8 @@ metrics are tracked:
   narrowest-posterior quartile hit **~79%** vs ~59% in the widest. Note the PGBART sampler
   reports high r-hat / low ESS on some latent `mu` dimensions (common for BART latents);
   posterior-mean *predictions* are stable across reruns (hold-out AUROC 0.702 with 2 chains
-  vs 0.705 with 4). See `cross_validation/bart.ipynb`; hold-out predictions (mean +
-  posterior std per row) are saved to `models/bart_holdout_preds.csv`.
+  vs 0.705 with 4). See `cross_validation/bart.ipynb`; unlike XGBoost there is no compact
+  serialized model artifact, but the seeded notebook re-trains in ~75 s.
 
 ## Roadmap
 
