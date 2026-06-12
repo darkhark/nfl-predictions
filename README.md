@@ -134,6 +134,15 @@ metrics are tracked:
   perspectives). Reported as the per-week mean, which matches the single pooled curve to
   within ~0.002.
 - **Hold-out accuracy** — `best_model.score` on the hold-out rows at a 0.5 threshold.
+  Treat as descriptive only: with 544 hold-out games the 95% binomial interval is
+  roughly ±4 points, so run-to-run differences of a point or two are mostly noise, and a
+  monotone recalibration can move it without changing ROC-AUC at all.
+- **Hold-out Brier** — mean squared error of the predicted probabilities over the pooled
+  hold-out rows (a proper scoring rule: uniquely minimized by reporting true
+  probabilities, so it rewards calibration and sharpness together; lower is better).
+  Reference points on the 2024+2025 hold-out: 0.25 = coin flip, **0.2495** = always
+  predicting the training-era home-win rate (56.2%). Tracked from run 5 (the earlier
+  models were not retained, and runs 1–4 used a different hold-out anyway).
 
 > **In-sample vs out-of-sample.** For runs 1–4 the grid-search *cross-validated* ROC-AUC
 > (~0.677) was measured on the training seasons and ran ~0.03 above the 2023 hold-out
@@ -146,18 +155,18 @@ metrics are tracked:
 > "when the model is confident, how good is it?", see the calibration / confidence-bucket /
 > home-vs-away-gap cells in `cross_validation/grid_search.ipynb`.)
 
-| # | Date | Feature selection | Features | Hold-out ROC-AUC | Hold-out acc |
-| --- | --- | --- | ---: | ---: | ---: |
-| 1 | 2024-07-23 | RFE (single split) | 28 | 0.629 | 0.597 |
-| 2 | 2024-08-06 | Cross-validated RFE (`StratifiedKFold`) | 34 | 0.643 | 0.597 |
-| 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.643 | 0.599 |
-| 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | 0.618 |
-| 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** |
-| 6 | 2026-06-12 | **BART** (`pymc-bart`), same 54 features / split as run 5 | 54 | **0.705** | **0.660** |
-| 7 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context), XGBoost | 45 | 0.696 | 0.647 |
-| 8 | 2026-06-12 | **BART** re-trained on the run-7 play-by-play feature set (corrected — see run 8 note) | 45 | 0.702 | 0.656 |
-| 9 | 2026-06-12 | Rank-only + **Phase 2 directional run/pass features**, XGBoost | 57 | 0.694 | 0.645 |
-| 10 | 2026-06-12 | **BART** on the run-9 directional feature set | 57 | **0.708** | 0.654 |
+| # | Date | Feature selection | Features | Hold-out ROC-AUC | Hold-out acc | Hold-out Brier |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| 1 | 2024-07-23 | RFE (single split) | 28 | 0.629 | 0.597 | — |
+| 2 | 2024-08-06 | Cross-validated RFE (`StratifiedKFold`) | 34 | 0.643 | 0.597 | — |
+| 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.643 | 0.599 | — |
+| 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | 0.618 | — |
+| 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** | 0.2218 |
+| 6 | 2026-06-12 | **BART** (`pymc-bart`), same 54 features / split as run 5 | 54 | **0.705** | **0.660** | 0.2194 |
+| 7 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context), XGBoost | 45 | 0.696 | 0.647 | 0.2206 |
+| 8 | 2026-06-12 | **BART** re-trained on the run-7 play-by-play feature set (corrected — see run 8 note) | 45 | 0.702 | 0.656 | 0.2199 |
+| 9 | 2026-06-12 | Rank-only + **Phase 2 directional run/pass features**, XGBoost | 57 | 0.694 | 0.645 | 0.2291 |
+| 10 | 2026-06-12 | **BART** on the run-9 directional feature set | 57 | **0.708** | 0.654 | **0.2185** |
 
 **What changed between runs**
 
@@ -243,7 +252,9 @@ metrics are tracked:
   pooled ROC-AUC **0.694**, accuracy **0.645** (vs 0.697/0.647 run 5, 0.696/0.647 run 7).
   Pattern across runs 5/7/9: XGBoost hold-out skill is insensitive to which of these
   correlated rank families it consumes — selection composition changes, aggregate skill
-  doesn't.
+  doesn't. Run 9's Brier (0.2291, backfilled) is also the worst of the two-season-hold-out
+  runs: this XGBoost model ranks games as well as its predecessors but its probabilities
+  are noticeably less calibrated — every BART run beats every XGBoost run on Brier.
 - **Run 8 correction:** the originally published run-8 numbers (0.705/0.660, identical to
   run 6) were **invalid** — `pymc-bart` raises on NaN inputs (sparse wp-context ranks have
   NaN early in seasons), the headless notebook execution failed, and the stale run-6
