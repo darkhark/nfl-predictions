@@ -1,6 +1,8 @@
 import nfl_data_py as nfl
 import pandas as pd
 
+from src.data.transformations import TEAM_ABBR_MAPPINGS
+
 # 'surface': ~12% null so not including for now
 # 'temp' and 'wind': ~45% null so not including for now
 COLS_TO_KEEP = [
@@ -13,15 +15,6 @@ ODDS_COLS = [
     'away_moneyline', 'home_moneyline', 'spread_line', 'away_spread_odds', 'home_spread_odds', 'total_line',
     'under_odds', 'over_odds'
 ]
-
-# If a team moved cities, the name in the weekly data will be the most recent name
-# For a smooth merge with the weekly data, the team names in the schedule data need to be updated
-# The key will be the team name in the schedule data and the value will be the team name in the weekly data
-TEAM_ABBR_MAPPINGS = {
-    'STL': 'LA',
-    'SD': 'LAC',
-    'OAK': 'LV'
-}
 
 
 def get_schedule_data(years, keep_game_id=True, keep_odds=False):
