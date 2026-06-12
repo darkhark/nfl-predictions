@@ -17,8 +17,10 @@ def make_play(posteam='AAA', defteam='BBB', season=2023, week=1, season_type='RE
         'season_type': season_type, 'play_id': play_id, 'game_id': game_id,
         'pass': is_pass, 'rush': is_rush, 'down': down, 'yardline_100': yardline_100,
         'third_down_converted': third_down_converted, 'success': success, 'epa': epa,
-        'wp': wp, 'xpass': xpass, 'fixed_drive': fixed_drive,
-        'fixed_drive_result': fixed_drive_result,
+        # float('nan') rather than None so the xpass column is float64 like real
+        # nflfastR data, not object dtype
+        'wp': wp, 'xpass': float('nan') if xpass is None else xpass,
+        'fixed_drive': fixed_drive, 'fixed_drive_result': fixed_drive_result,
     }
 
 
@@ -206,6 +208,19 @@ class TestAggregateSeason(unittest.TestCase):
         plays = pd.DataFrame([make_play()]).drop(columns=['epa'])
         with self.assertRaises(ValueError):
             collect._aggregate_season(plays)
+
+    def test_column_order_is_deterministic_across_context_presence(self):
+        # pivot_table's column order depends on which contexts appear in the data; the
+        # per-season parquet caches must share one schema regardless.
+        competitive_only = pd.DataFrame([make_play(is_pass=1, epa=0.1, wp=0.5)])
+        with_garbage = pd.DataFrame([
+            make_play(play_id=1, is_pass=1, epa=0.1, wp=0.5),
+            make_play(play_id=2, is_rush=1, epa=0.2, wp=0.97),
+        ])
+        self.assertEqual(
+            list(collect._aggregate_season(competitive_only).columns),
+            list(collect._aggregate_season(with_garbage).columns),
+        )
 
 
 if __name__ == '__main__':

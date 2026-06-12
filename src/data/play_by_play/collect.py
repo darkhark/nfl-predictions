@@ -167,11 +167,13 @@ def _pivot_context_components(components):
         fill_value=0,
     )
     pivoted.columns = [f'{component}_{context}' for component, context in pivoted.columns]
-    for component in COMPONENT_COLUMNS:
-        for context in WP_CONTEXTS:
-            column = f'{component}_{context}'
-            if column not in pivoted.columns:
-                pivoted[column] = 0
+    # Reindex to a canonical column order: pivot_table's output order depends on which
+    # contexts appear in the data, and the per-season parquet caches must share one
+    # schema. reindex also backfills any component/context column absent from the data
+    # (zero plays in that context).
+    ordered_columns = [f'{component}_{context}'
+                       for component in COMPONENT_COLUMNS for context in WP_CONTEXTS]
+    pivoted = pivoted.reindex(columns=ordered_columns, fill_value=0)
     return pivoted.reset_index()
 
 
@@ -189,6 +191,9 @@ def _aggregate_season(pbp_df):
     drive_components = _aggregate_red_zone_components(pbp_df)
     components = play_components.merge(
         drive_components, on=AGGREGATION_KEY_COLUMNS + [CONTEXT_COL], how='outer'
-    ).fillna(0)
+    )
+    # Fill only the component columns: a side missing from the outer merge means zero
+    # plays/drives, and restricting the fill keeps pandas from object-downcasting keys.
+    components[COMPONENT_COLUMNS] = components[COMPONENT_COLUMNS].fillna(0)
     components = components.rename(columns={'posteam': TEAM_COL, 'defteam': OPPONENT_TEAM_COL})
     return _pivot_context_components(components)
