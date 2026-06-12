@@ -156,6 +156,7 @@ metrics are tracked:
 | 6 | 2026-06-12 | **BART** (`pymc-bart`), same 54 features / split as run 5 | 54 | **0.705** | **0.660** |
 | 7 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context), XGBoost | 45 | 0.696 | 0.647 |
 | 8 | 2026-06-12 | **BART** re-trained on the run-7 play-by-play feature set | 45 | 0.705 | 0.660 |
+| 9 | 2026-06-12 | Rank-only + **Phase 2 directional run/pass features**, XGBoost | 57 | 0.694 | 0.645 |
 
 **What changed between runs**
 
@@ -231,6 +232,18 @@ metrics are tracked:
   they replaced. The experiment cadence going forward is XGBoost first, then BART, for
   each play-by-play phase; Phase 2 (directional run/pass splits) is information the box
   score genuinely lacks.
+- **Run 8 → 9:** added **Phase 2 directional features** — average yards and explosive-play
+  rate (rush ≥ 10, pass ≥ 20) for 7 run buckets (`run_location` × `run_gap`) and 6 pass
+  buckets (`pass_location` × `pass_length`), per wp context, off and def (936 candidate
+  columns; rank-only pool grew 569 → 1,193). Era note: nflfastR has no pass charting
+  before 2006, so directional pass features are NaN for 2003–2005 (run direction works in
+  all eras). RFE selected **57 features — 35 play-by-play (22 directional, 13 of those
+  about what defenses allow by direction)** and CV ROC-AUC peaked at **0.685** (highest of
+  any pool; 0.681 at the 57-feature selection point). The hold-out stayed flat once more:
+  pooled ROC-AUC **0.694**, accuracy **0.645** (vs 0.697/0.647 run 5, 0.696/0.647 run 7).
+  Pattern across runs 5/7/9: XGBoost hold-out skill is insensitive to which of these
+  correlated rank families it consumes — selection composition changes, aggregate skill
+  doesn't.
 
 ## Roadmap
 
