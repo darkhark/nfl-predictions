@@ -123,7 +123,10 @@ def _aggregate_red_zone_components(pbp_df):
     otherwise turn every long touchdown into a fake red-zone trip). A drive's context
     comes from the win probability on its first scrimmage play (drives can drift across
     contexts mid-drive; the first snap reflects the situation the drive started in).
-    fixed_drive numbers drives across the whole game, so (game_id, fixed_drive) is unique.
+    Drives that enter the red zone only via a kick or kneel (e.g. driving to the 22 and
+    kicking a field goal from the 14) are intentionally excluded on both sides of the
+    red_zone_td_rate ratio. fixed_drive numbers drives across the whole game, so
+    (game_id, fixed_drive) is unique.
     """
     scrimmage = pbp_df[(pbp_df['pass'] == 1) | (pbp_df['rush'] == 1)]
     drive_plays = scrimmage[scrimmage['fixed_drive'].notna() & scrimmage['posteam'].notna()].sort_values('play_id')
