@@ -155,8 +155,9 @@ metrics are tracked:
 | 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** |
 | 6 | 2026-06-12 | **BART** (`pymc-bart`), same 54 features / split as run 5 | 54 | **0.705** | **0.660** |
 | 7 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context), XGBoost | 45 | 0.696 | 0.647 |
-| 8 | 2026-06-12 | **BART** re-trained on the run-7 play-by-play feature set | 45 | 0.705 | 0.660 |
+| 8 | 2026-06-12 | **BART** re-trained on the run-7 play-by-play feature set (corrected — see run 8 note) | 45 | 0.702 | 0.656 |
 | 9 | 2026-06-12 | Rank-only + **Phase 2 directional run/pass features**, XGBoost | 57 | 0.694 | 0.645 |
+| 10 | 2026-06-12 | **BART** on the run-9 directional feature set | 57 | **0.708** | 0.654 |
 
 **What changed between runs**
 
@@ -244,6 +245,24 @@ metrics are tracked:
   Pattern across runs 5/7/9: XGBoost hold-out skill is insensitive to which of these
   correlated rank families it consumes — selection composition changes, aggregate skill
   doesn't.
+- **Run 8 correction:** the originally published run-8 numbers (0.705/0.660, identical to
+  run 6) were **invalid** — `pmc-bart` raises on NaN inputs (sparse wp-context ranks have
+  NaN early in seasons), the headless notebook execution failed, and the stale run-6
+  outputs left in the notebook were mistakenly recorded as fresh results. `bart.ipynb`
+  now fills NaN with an out-of-range sentinel (`BART_NAN_SENTINEL = -100`, letting the
+  trees isolate the "no data yet" region the way XGBoost routes missing values) and
+  asserts no NaN reaches the sampler. The corrected run 8: hold-out ROC-AUC **0.702**,
+  accuracy **0.656**, Brier 0.2199 — slightly *below* run 6, consistent with the flat
+  XGBoost result on the same features.
+- **Run 9 → 10:** BART on the 57-feature directional set, with the NaN sentinel.
+  **Hold-out ROC-AUC 0.708 — the best of any run** (0.705 run 6), with the best
+  probability quality too (Brier **0.2185**, log loss **0.6267**) and validation ROC-AUC
+  up 0.655 → 0.668. Accuracy at the 0.5 threshold dipped to 0.654 (0.660 run 6) — a
+  threshold-sensitive metric at odds with the improved Brier/log-loss, suggesting a
+  calibration pass could recover it. Posterior uncertainty remains informative:
+  narrowest-posterior-quartile picks hit **77%**. Net: the directional features are the
+  first addition to move the champion estimator — modestly, but in ranking AND
+  probability quality simultaneously — where XGBoost stayed flat (run 9).
 
 ## Roadmap
 
