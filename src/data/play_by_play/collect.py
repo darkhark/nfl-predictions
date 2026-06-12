@@ -112,3 +112,28 @@ def _aggregate_play_components(pbp_df):
     return plays.groupby(
         AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
     )[PLAY_COMPONENT_COLUMNS].sum().reset_index()
+
+
+def _aggregate_red_zone_components(pbp_df):
+    """
+    Count red-zone trips per team-week-context at the drive level: a drive counts as a
+    red-zone trip when any of its plays starts at or inside the opponent's 20. A drive's
+    context comes from the win probability on its first play (drives can drift across
+    contexts mid-drive; the first play reflects the situation the drive started in).
+    fixed_drive numbers drives across the whole game, so (game_id, fixed_drive) is unique.
+    """
+    drive_plays = pbp_df[pbp_df['fixed_drive'].notna() & pbp_df['posteam'].notna()].sort_values('play_id')
+    drives = drive_plays.groupby(['game_id', 'fixed_drive'] + AGGREGATION_KEY_COLUMNS).agg(
+        min_yardline_100=('yardline_100', 'min'),
+        first_play_wp=('wp', 'first'),
+        drive_result=('fixed_drive_result', 'first'),
+    ).reset_index()
+
+    red_zone_drives = drives[drives['min_yardline_100'] <= RED_ZONE_YARDLINE].copy()
+    red_zone_drives[CONTEXT_COL] = _assign_wp_context(red_zone_drives['first_play_wp'])
+    red_zone_drives['red_zone_drive_count'] = 1
+    red_zone_drives['red_zone_td_drive_count'] = (red_zone_drives['drive_result'] == 'Touchdown').astype(int)
+
+    return red_zone_drives.groupby(
+        AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
+    )[DRIVE_COMPONENT_COLUMNS].sum().reset_index()

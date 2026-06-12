@@ -96,5 +96,51 @@ class TestAggregatePlayComponents(unittest.TestCase):
         self.assertFalse(self.result.duplicated(subset=expected_keys).any())
 
 
+class TestAggregateRedZoneComponents(unittest.TestCase):
+
+    def setUp(self):
+        plays = pd.DataFrame([
+            # Drive 1: reaches the red zone (min yardline 18), ends in a TD.
+            # First play wp 0.5 -> the whole drive counts as competitive even though
+            # a later play is in garbage range.
+            make_play(play_id=1, fixed_drive=1, yardline_100=45.0, wp=0.50,
+                      fixed_drive_result='Touchdown', is_pass=1),
+            make_play(play_id=2, fixed_drive=1, yardline_100=18.0, wp=0.96,
+                      fixed_drive_result='Touchdown', is_rush=1),
+            # Drive 2: never reaches the red zone -> excluded
+            make_play(play_id=3, fixed_drive=2, yardline_100=60.0, wp=0.5,
+                      fixed_drive_result='Punt', is_pass=1),
+            # Drive 3: red zone field goal in garbage_leading (first play wp 0.97)
+            make_play(play_id=4, fixed_drive=3, yardline_100=15.0, wp=0.97,
+                      fixed_drive_result='Field goal', is_rush=1),
+        ])
+        self.result = collect._aggregate_red_zone_components(plays)
+
+    def _row(self, context):
+        return self.result[self.result[collect.CONTEXT_COL] == context].iloc[0]
+
+    def test_red_zone_drive_counts_by_context(self):
+        competitive = self._row(collect.COMPETITIVE)
+        self.assertEqual(competitive['red_zone_drive_count'], 1)
+        self.assertEqual(competitive['red_zone_td_drive_count'], 1)
+        leading = self._row(collect.GARBAGE_LEADING)
+        self.assertEqual(leading['red_zone_drive_count'], 1)
+        self.assertEqual(leading['red_zone_td_drive_count'], 0)
+
+    def test_non_red_zone_drives_are_excluded(self):
+        self.assertEqual(self.result['red_zone_drive_count'].sum(), 2)
+
+    def test_drive_context_uses_first_play_in_play_id_order(self):
+        # Same drive 1 rows but shuffled: context must still come from play_id 1 (wp 0.5)
+        plays = pd.DataFrame([
+            make_play(play_id=2, fixed_drive=1, yardline_100=18.0, wp=0.96,
+                      fixed_drive_result='Touchdown', is_rush=1),
+            make_play(play_id=1, fixed_drive=1, yardline_100=45.0, wp=0.50,
+                      fixed_drive_result='Touchdown', is_pass=1),
+        ])
+        result = collect._aggregate_red_zone_components(plays)
+        self.assertEqual(result[collect.CONTEXT_COL].iloc[0], collect.COMPETITIVE)
+
+
 if __name__ == '__main__':
     unittest.main()
