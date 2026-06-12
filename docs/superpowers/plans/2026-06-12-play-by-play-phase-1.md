@@ -380,6 +380,9 @@ GARBAGE_LEADING = 'garbage_leading'
 GARBAGE_TRAILING = 'garbage_trailing'
 WP_CONTEXTS = [COMPETITIVE, GARBAGE_LEADING, GARBAGE_TRAILING]
 GARBAGE_WP_THRESHOLD = 0.95
+# 1 - 0.95 is 0.050000000000000044 in floating point, which would misclassify the
+# inclusive 0.05 boundary; round keeps the bounds coupled and exact.
+GARBAGE_WP_LOWER_THRESHOLD = round(1 - GARBAGE_WP_THRESHOLD, 10)
 RED_ZONE_YARDLINE = 20
 
 # wp is always the offense's win probability. From the defense's perspective the
@@ -428,7 +431,7 @@ def _assign_wp_context(wp):
     """
     context = pd.Series(COMPETITIVE, index=wp.index)
     context[wp > GARBAGE_WP_THRESHOLD] = GARBAGE_LEADING
-    context[wp < 1 - GARBAGE_WP_THRESHOLD] = GARBAGE_TRAILING
+    context[wp < GARBAGE_WP_LOWER_THRESHOLD] = GARBAGE_TRAILING
     return context
 ```
 
