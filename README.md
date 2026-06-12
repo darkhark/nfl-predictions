@@ -151,7 +151,7 @@ classifier. Two **out-of-sample** metrics are tracked:
 | 3 | 2026-06-11 | Cross-validated RFE + rank features | 40 | 0.643 | 0.599 |
 | 4 | 2026-06-11 | Cross-validated RFE, **rank-only** (cumulative averages removed) | 32 | 0.642 | 0.618 |
 | 5 | 2026-06-11 | Rank-only, **`dakota` dropped + 2024+2025 two-season hold-out** | 54 | **0.697** | **0.647** |
-| 6 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context) | 45 | _pending grid search_ | _pending grid search_ |
+| 6 | 2026-06-12 | Rank-only + **play-by-play features** (EPA/success, situational, PROE × wp context) | 45 | 0.696 | 0.647 |
 
 **What changed between runs**
 
@@ -185,7 +185,7 @@ classifier. Two **out-of-sample** metrics are tracked:
   and the home-vs-away probability gap correlates with correctness much more strongly
   (r 0.07 → **0.21**; widest-gap quintile ~81% accurate). The two-season hold-out resolves
   the single-season caveat from run 4.
-- **Run 5 → 6 (in progress):** added **Phase 1 play-by-play features** (spec:
+- **Run 5 → 6:** added **Phase 1 play-by-play features** (spec:
   `docs/superpowers/specs/2026-06-12-play-by-play-features-design.md`): per-play EPA and
   success rates (overall/pass/rush), early-down success, third-down conversion, red-zone TD
   rate per scrimmage red-zone trip, and pass rate over expected — each split three ways by
@@ -195,10 +195,17 @@ classifier. Two **out-of-sample** metrics are tracked:
   Cross-validated RFE selected **45 features — 21 of them play-by-play ranks (12 from
   garbage-time contexts)**, displacing many of Run 5's box-score survivors; CV ROC-AUC at
   the selection point is 0.678 (peak 0.680 at 51 features) vs ~0.677 for the Run 5 pool.
-  Hold-out numbers await the `grid_search.ipynb` re-run, which retunes hyperparameters on
-  the new feature set before touching the 2024+2025 hold-out — those cells fill in the run-6
-  table row. PBP components are cached per season in `data/play_by_play/aggregated/`
-  (refresh with `get_play_by_play_data(years, refresh=True)` for in-progress seasons).
+  After re-tuning (`grid_search.ipynb`, `BEST_NUM_FEATS = 45`), the 2024+2025 hold-out came
+  back **flat vs Run 5: pooled ROC-AUC 0.696 (was 0.697), accuracy 0.647 (was 0.647)**.
+  Interpretation: the pbp efficiency metrics carry real signal — RFE prefers them
+  head-to-head against box-score ranks — but at the team-week-rank level that signal
+  substantially **overlaps** what yards/EPA box totals already encoded, so aggregate skill
+  didn't move. The model is no worse and now leans on cleaner inputs (competitive-context
+  rates are insulated from garbage-time stat-padding). Phase 2 (directional run/pass
+  splits) targets information the box score genuinely lacks; per the phase plan, whether to
+  proceed is a judgment call given the flat Phase 1 result. PBP components are cached per
+  season in `data/play_by_play/aggregated/` (refresh with
+  `get_play_by_play_data(years, refresh=True)` for in-progress seasons).
 
 ## Roadmap
 
