@@ -514,6 +514,19 @@ class TestDirectionalComponents(unittest.TestCase):
         self.assertEqual(leading['run_middle_attempt_count'], 1)
         self.assertEqual(leading['run_middle_explosive_count'], 1)
 
+    def test_foreign_gap_label_lands_in_no_bucket(self):
+        # If nflfastR ever introduces a gap value outside end/tackle/guard, the play
+        # must silently land in no bucket rather than corrupt a known one.
+        result = self._aggregate([
+            make_play(play_id=1, is_rush=1, run_location='left', run_gap='unknown',
+                      yards_gained=15.0, epa=0.6),
+        ])
+        row = result.iloc[0]
+        bucket_attempts = sum(
+            row[f'{bucket}_attempt_count'] for bucket in collect.RUN_BUCKETS)
+        self.assertEqual(bucket_attempts, 0)
+        self.assertEqual(row['play_count'], 1)
+
 
 if __name__ == '__main__':
     unittest.main()

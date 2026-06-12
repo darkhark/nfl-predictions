@@ -109,10 +109,13 @@ RATE_METRICS = [
 
 def _assign_run_bucket(plays):
     """
-    Label each rush with its directional bucket. Middle runs have no gap by definition;
-    left/right runs need a gap label. Unlabeled runs (NaN location, or sided runs with
-    NaN gap, ~5% and ~30% of rushes respectively) get no bucket — they still count in
-    the aggregate Phase 1 metrics, and per-bucket denominators only cover labeled runs.
+    Label each rush with its directional bucket. Middle runs have no gap by definition
+    and bucket as run_middle; left/right runs need a gap label. Unlabeled runs (NaN
+    run_location, ~3% of rushes; sided runs with NaN gap are ~0% in real data) get no
+    bucket — they still count in the aggregate Phase 1 metrics, and per-bucket
+    denominators only cover labeled runs. A foreign gap label (e.g. a future nflfastR
+    value outside end/tackle/guard) would form a name outside DIRECTIONAL_BUCKETS and
+    also land in no bucket.
     """
     bucket = pd.Series(None, index=plays.index, dtype='object')
     is_rush = plays['rush'] == 1
