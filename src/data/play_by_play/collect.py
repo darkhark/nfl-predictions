@@ -202,6 +202,67 @@ def _aggregate_season(pbp_df):
     return _pivot_context_components(components)
 
 
+def _add_game_count_columns(df):
+    """
+    Add per-team and per-opponent game counters within each season. Week number is not a
+    reliable divisor because of byes, so cumulative math orders and groups by these
+    counters, mirroring the weekly module.
+    """
+    df.sort_values(by=[TEAM_COL, SEASON_COL, WEEK_COL], inplace=True)
+    df[TEAM_GAME_COUNT_COL] = df.groupby([TEAM_COL, SEASON_COL]).cumcount() + 1
+    df.sort_values(by=[OPPONENT_TEAM_COL, SEASON_COL, WEEK_COL], inplace=True)
+    df[OPP_GAME_COUNT_COL] = df.groupby([OPPONENT_TEAM_COL, SEASON_COL]).cumcount() + 1
+    df.sort_values(by=[TEAM_COL, SEASON_COL, WEEK_COL], inplace=True)
+    return df
+
+
+def _add_cumulative_rate_columns(df):
+    """
+    Add season-to-date rate columns for every metric/context, offense and defense.
+
+    Every rate is cumsum(numerator) / cumsum(denominator) within the season - never an
+    average of weekly rates - so thin contexts accumulate correctly. A zero cumulative
+    denominator yields NaN: no snaps means no rate, not a rate of zero.
+
+    Offense accumulates within (team, season). Defense accumulates the same base
+    components within (opp_team, season) - exactly the weekly module's def_opp pattern,
+    so def_opp_* on a row describes the opponent's defense season-to-date. Defense
+    context labels are swapped via DEFENSE_CONTEXT_SWAP because wp belongs to the
+    offense: plays where the offense was garbage_leading are the defense's
+    garbage_trailing snaps.
+
+    Requires a unique index (reset_index before calling) and game-count columns.
+    """
+    component_cols = [f'{component}_{context}'
+                      for component in COMPONENT_COLUMNS for context in WP_CONTEXTS]
+
+    df = df.sort_values(by=[TEAM_COL, SEASON_COL, TEAM_GAME_COUNT_COL])
+    off_cumulative = df.groupby([TEAM_COL, SEASON_COL])[component_cols].cumsum()
+
+    opp_ordered = df.sort_values(by=[OPPONENT_TEAM_COL, SEASON_COL, OPP_GAME_COUNT_COL])
+    def_cumulative = opp_ordered.groupby(
+        [OPPONENT_TEAM_COL, SEASON_COL]
+    )[component_cols].cumsum()
+
+    rate_columns = {}
+    for metric, numerator, denominator in RATE_METRICS:
+        for context in WP_CONTEXTS:
+            offense_numerator = off_cumulative[f'{numerator}_{context}']
+            offense_denominator = off_cumulative[f'{denominator}_{context}']
+            rate_columns[f'off_{metric}_{context}_cumulative_average'] = (
+                offense_numerator / offense_denominator.where(offense_denominator != 0)
+            )
+
+            defense_context = DEFENSE_CONTEXT_SWAP[context]
+            defense_numerator = def_cumulative[f'{numerator}_{context}']
+            defense_denominator = def_cumulative[f'{denominator}_{context}']
+            rate_columns[f'def_opp_{metric}_{defense_context}_cumulative_average'] = (
+                defense_numerator / defense_denominator.where(defense_denominator != 0)
+            )
+
+    return pd.concat([df, pd.DataFrame(rate_columns)], axis=1)
+
+
 def get_play_by_play_data(years, refresh=False):
     """
     Return team-week component sums for the specified season(s), one row per team-game.

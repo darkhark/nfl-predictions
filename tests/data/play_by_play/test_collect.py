@@ -258,5 +258,84 @@ class TestGetPlayByPlayDataCaching(unittest.TestCase):
             collect.get_play_by_play_data('2023')
 
 
+def make_component_row(team, opp_team, season=2023, week=1, season_type='REG', **overrides):
+    row = {'team': team, 'opp_team': opp_team, 'season': season, 'week': week,
+           'season_type': season_type}
+    for component in collect.COMPONENT_COLUMNS:
+        for context in collect.WP_CONTEXTS:
+            row[f'{component}_{context}'] = 0
+    row.update(overrides)
+    return row
+
+
+class TestCumulativeRateColumns(unittest.TestCase):
+
+    def setUp(self):
+        components = pd.DataFrame([
+            # AAA week 1 vs BBB: 10 competitive plays / 5 EPA; 2 leading-garbage plays / 1 EPA
+            make_component_row('AAA', 'BBB', week=1,
+                               play_count_competitive=10, epa_sum_competitive=5.0,
+                               play_count_garbage_leading=2, epa_sum_garbage_leading=1.0),
+            make_component_row('BBB', 'AAA', week=1,
+                               play_count_competitive=8, epa_sum_competitive=-2.0),
+            # AAA week 2 vs CCC: efficiency drops; first trailing-garbage snaps appear.
+            # Play count differs from week 1 on purpose so ratio-of-cumsums and
+            # mean-of-weekly-rates give different answers and the test can tell them apart.
+            make_component_row('AAA', 'CCC', week=2,
+                               play_count_competitive=20, epa_sum_competitive=1.0,
+                               play_count_garbage_trailing=4, epa_sum_garbage_trailing=-1.0),
+            make_component_row('CCC', 'AAA', week=2,
+                               play_count_competitive=12, epa_sum_competitive=0.0),
+        ]).reset_index(drop=True)
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        self.result = collect._add_cumulative_rate_columns(components)
+
+    def _value(self, team, week, col):
+        row = self.result[(self.result['team'] == team) & (self.result['week'] == week)]
+        return row[col].values[0]
+
+    def test_cumulative_rate_is_ratio_of_cumulative_sums(self):
+        # Week 1: 5/10 = 0.5. Week 2: (5+1)/(10+20) = 0.2.
+        # A wrong mean-of-weekly-rates implementation would give (0.5 + 0.05)/2 = 0.275.
+        self.assertAlmostEqual(
+            self._value('AAA', 1, 'off_epa_per_play_competitive_cumulative_average'), 0.5)
+        self.assertAlmostEqual(
+            self._value('AAA', 2, 'off_epa_per_play_competitive_cumulative_average'), 0.2)
+
+    def test_zero_denominator_is_nan_then_recovers(self):
+        # AAA had no trailing-garbage snaps in week 1 -> NaN, not 0
+        self.assertTrue(pd.isna(
+            self._value('AAA', 1, 'off_epa_per_play_garbage_trailing_cumulative_average')))
+        # Week 2: cumulative = (0 + -1.0) / (0 + 4) = -0.25
+        self.assertAlmostEqual(
+            self._value('AAA', 2, 'off_epa_per_play_garbage_trailing_cumulative_average'), -0.25)
+
+    def test_defense_mirrors_opponent_offense_on_first_game(self):
+        # def_opp_* on AAA's week-1 row is BBB's defense; BBB's only game so far is this
+        # one, so it equals AAA's own offense value from the same game.
+        self.assertAlmostEqual(
+            self._value('AAA', 1, 'def_opp_epa_per_play_competitive_cumulative_average'), 0.5)
+
+    def test_defense_context_labels_are_swapped(self):
+        # AAA's leading-garbage offense (1.0 EPA / 2 plays) is BBB's trailing-garbage
+        # defense: the defense was on the field while ITS team was likely losing.
+        self.assertAlmostEqual(
+            self._value('AAA', 1, 'def_opp_epa_per_play_garbage_trailing_cumulative_average'), 0.5)
+        self.assertTrue(pd.isna(
+            self._value('AAA', 1, 'def_opp_epa_per_play_garbage_leading_cumulative_average')))
+
+    def test_defense_accumulates_across_opponent_games(self):
+        # CCC's week-2 def_opp row tracks AAA's defense. AAA defended BBB week 1
+        # (8 plays, -2 EPA) and CCC week 2 (12 plays, 0 EPA): (-2+0)/(8+12) = -0.1
+        self.assertAlmostEqual(
+            self._value('CCC', 2, 'def_opp_epa_per_play_competitive_cumulative_average'), -0.1)
+
+    def test_all_rate_metric_columns_exist(self):
+        for metric, _, _ in collect.RATE_METRICS:
+            for context in collect.WP_CONTEXTS:
+                self.assertIn(f'off_{metric}_{context}_cumulative_average', self.result.columns)
+                self.assertIn(f'def_opp_{metric}_{context}_cumulative_average', self.result.columns)
+
+
 if __name__ == '__main__':
     unittest.main()
