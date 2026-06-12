@@ -106,8 +106,9 @@ class TestAddRankAndRankChangeColumns(unittest.TestCase):
 
     def test_defense_rank_change_is_grouped_by_opponent(self):
         # def_opp columns describe the OPPONENT's defense, so changes group by opp_team.
-        # On AAA's rows the opponent is BBB: BBB's defense goes rank 2 -> 1, change -1.
-        self.assertEqual(self._value('AAA', 2, 'def_opp_metric_cumulative_average_rank_change'), -1)
+        # On AAA's rows the opponent is BBB: BBB's defense allowed 10.0 then 16.0, so its
+        # rank goes 1 -> 2 and the change is +1.
+        self.assertEqual(self._value('AAA', 2, 'def_opp_metric_cumulative_average_rank_change'), 1)
 
     def test_nan_values_get_nan_rank(self):
         frame = make_frame()
