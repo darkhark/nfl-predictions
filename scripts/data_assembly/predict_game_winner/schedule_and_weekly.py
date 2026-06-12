@@ -14,7 +14,7 @@ MODEL_FEATURES_LIST_PATH = os.path.join(
 )
 
 # %%
-schedule_and_weekly_df = get_schedule_and_weekly_data(YEARS)
+schedule_and_weekly_df = get_schedule_and_weekly_data(YEARS, include_play_by_play=True)
 schedule_and_weekly_df.head()
 
 # %%
