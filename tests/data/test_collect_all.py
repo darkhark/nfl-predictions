@@ -197,5 +197,43 @@ class MyTestCase(unittest.TestCase):
         return target_df
 
 
+class TestPlayByPlayIntegration(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.all_data = collect_all.get_schedule_and_weekly_data([2023], include_play_by_play=True)
+
+    def test_play_by_play_columns_reach_all_four_families(self):
+        expected_columns = [
+            'off_target_epa_per_play_competitive_cumulative_average_rank',
+            'off_opp_epa_per_play_competitive_cumulative_average_rank',
+            'def_target_epa_per_play_garbage_trailing_cumulative_average_rank',
+            'def_opp_epa_per_play_garbage_trailing_cumulative_average_rank',
+        ]
+        for column in expected_columns:
+            self.assertIn(column, self.all_data.columns)
+
+    def test_play_by_play_features_are_populated_after_week_two(self):
+        late_weeks = self.all_data[self.all_data['week'] >= 3]
+        non_null_fraction = late_weeks[
+            'off_target_epa_per_play_competitive_cumulative_average'
+        ].notna().mean()
+        self.assertGreater(non_null_fraction, 0.95)
+
+    def test_play_by_play_features_are_shifted_off_week_one(self):
+        # The leakage shift moves every stat forward one game, so week 1 (a team's first
+        # game) must have no play-by-play feature values. Unshifted columns would be
+        # populated here.
+        week_one = self.all_data[self.all_data['week'] == 1]
+        self.assertTrue(
+            week_one['off_target_epa_per_play_competitive_cumulative_average'].isna().all()
+        )
+
+    def test_excluding_play_by_play_keeps_legacy_columns_only(self):
+        legacy = collect_all.get_schedule_and_weekly_data([2023])
+        pbp_columns = [col for col in legacy.columns if 'epa_per_play' in col]
+        self.assertEqual(pbp_columns, [])
+
+
 if __name__ == '__main__':
     unittest.main()
