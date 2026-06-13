@@ -27,7 +27,14 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
         self.all_model_scores = []
         self.importances = None
 
-    def get_optimal_features_no_grouped_records(self, drop_rate=.1, max_iter=10, verbose=0, base_margin=None, n_folds=5):
+    def get_optimal_features_no_grouped_records(self, drop_rate=.1, max_iter=10, verbose=0, base_margin=None,
+                                                n_folds=5, min_features=None):
+        """
+        Run cross-validated RFE for up to max_iter iterations, dropping drop_rate of the
+        surviving features each round. When min_features is set, the drop is clamped so
+        the feature count never falls below it and the loop stops once it is reached —
+        the same floor semantics as BartBackwardElimination.
+        """
         max_iter = min(max_iter, len(self.features))
         train_features = self.features
         for i in range(max_iter):
@@ -59,10 +66,14 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
                     self.all_models[len(train_features)] = {fold: model}
                     self.test_preds[len(train_features)] = {fold: test_preds}
             self.all_model_scores.append(np.mean(model_scores))
+            if min_features is not None and len(train_features) <= min_features:
+                break
             if i == 0:
                 train_features = list(self.importances.index)
             else:
                 new_num_features = int(np.floor(len(train_features) * (1 - drop_rate)))
+                if min_features is not None:
+                    new_num_features = max(new_num_features, min_features)
                 train_features = list(self.importances.index)[:new_num_features]
 
     def get_features_in_dataframe(self):
