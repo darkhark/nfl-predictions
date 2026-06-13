@@ -383,8 +383,9 @@ class TestPenaltyComponents(unittest.TestCase):
         self.assertTrue(result.empty)
 
     def test_penalty_team_is_normalized_for_relocated_franchises(self):
-        # penalty_team carries era abbreviations like posteam/defteam; without
-        # normalization a 2005 Chargers penalty would compare 'LAC' == 'SD' and vanish.
+        # Consistency guard: real pbp already uses modern abbreviations everywhere, but
+        # if any input ever carried era codes, posteam/defteam are normalized and
+        # penalty_team must be too, or the committed/drawn comparison desynchronizes.
         plays = pd.DataFrame([
             make_play(posteam='SD', defteam='OAK', play_id=1, is_pass=1, epa=0.1),
             make_play(posteam='SD', defteam='OAK', play_id=2, penalty=1.0,
@@ -458,10 +459,12 @@ COMPONENT_COLUMNS = PLAY_COMPONENT_COLUMNS + DRIVE_COMPONENT_COLUMNS + PENALTY_C
 ] + DIRECTIONAL_RATE_METRICS + PHASE3_RATE_METRICS + PENALTY_RATE_METRICS
 ```
 
-(d) In `_aggregate_season`, FIRST extend the team normalization — `penalty_team` carries
-era abbreviations too, and comparing a normalized `posteam` ('LAC') against an
-unnormalized `penalty_team` ('SD') would silently drop every relocated-franchise
-penalty before 2016:
+(d) In `_aggregate_season`, FIRST extend the team normalization to `penalty_team`.
+(Verified 2026-06-12: nflfastR pbp already uses MODERN abbreviations for all seasons —
+2005 has LAC/LV/LA, never SD/OAK/STL — so all three replaces are no-ops on real data;
+the era mapping exists for schedule data. This line is a consistency guard so the
+committed/drawn comparison can never desynchronize if any input ever carries era
+codes: the three team columns must always receive identical treatment.)
 
 ```python
     pbp_df['posteam'] = pbp_df['posteam'].replace(TEAM_ABBR_MAPPINGS)
