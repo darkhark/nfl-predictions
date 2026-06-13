@@ -168,6 +168,7 @@ metrics are tracked:
 | 9 | 2026-06-12 | Rank-only + **Phase 2 directional run/pass features**, XGBoost | 57 | 0.694 | 0.645 | 0.2291 |
 | 10 | 2026-06-12 | **BART** on the run-9 directional feature set | 57 | **0.708** | 0.654 | **0.2185** |
 | 11 | 2026-06-12 | Rank-only + **Phase 3 features** (trenches, luck, tendencies, penalties, pace), XGBoost | 51 | **0.707** | 0.649 | 0.2206 |
+| 12 | 2026-06-12 | **BART** on the run-11 Phase 3 feature set | 51 | 0.699 | 0.651 | 0.2207 |
 
 **What changed between runs**
 
@@ -295,6 +296,17 @@ metrics are tracked:
   generations), accuracy 0.649, Brier 0.2206 (recovered from run 9's 0.2291). The
   trench/luck family appears to carry signal the box score and the earlier pbp families
   did not.
+- **Run 11 → 12:** BART on the same 51-feature Phase 3 set came back **0.699 / 0.651 /
+  Brier 0.2207 — below its run-10 result** (0.708 / 0.654 / 0.2185) by more than the
+  ~±0.004 sampler wobble. An instructive reversal: the feature set that finally moved
+  XGBoost *hurt* BART, plausibly because RFE selects with XGBoost importances — the
+  estimators disagree about which correlated rank families they can exploit.
+  **The champion remains run 10's BART on the 57-feature directional set**; run 11's
+  XGBoost (0.707/0.2206) is now a close second. Width-stratified Brier stayed strictly
+  monotone (0.174 → 0.250), so run 12's posterior uncertainty remains trustworthy even
+  at its lower skill. Open question for a future run: estimator-specific feature
+  selection (RFE with BART importances, or BART on the run-9 57-set ∪ Phase 3 trench
+  picks).
 
 ## Roadmap
 
