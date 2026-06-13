@@ -671,6 +671,21 @@ class TestPenaltyComponents(unittest.TestCase):
         self.assertEqual(row['pen_committed_yards_sum_competitive'], 15.0)
         self.assertEqual(row['play_count_competitive'], 1)
 
+    def test_penalty_team_is_normalized_for_relocated_franchises(self):
+        # Consistency guard: real pbp already uses modern abbreviations everywhere
+        # (verified: 2005 posteam values are LAC/LV/LA, never SD/OAK/STL), but if any
+        # input ever carried era codes, posteam/defteam are normalized and penalty_team
+        # must be too, or the committed/drawn comparison desynchronizes.
+        plays = pd.DataFrame([
+            make_play(posteam='SD', defteam='OAK', play_id=1, is_pass=1, epa=0.1),
+            make_play(posteam='SD', defteam='OAK', play_id=2, penalty=1.0,
+                      penalty_team='SD', penalty_yards=10.0),
+        ])
+        season = collect._aggregate_season(plays)
+        row = season[season['team'] == 'LAC'].iloc[0]
+        self.assertEqual(row['pen_committed_count_competitive'], 1)
+        self.assertEqual(row['pen_committed_yards_sum_competitive'], 10.0)
+
 
 if __name__ == '__main__':
     unittest.main()

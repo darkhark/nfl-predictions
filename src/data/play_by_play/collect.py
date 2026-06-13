@@ -385,6 +385,7 @@ def _aggregate_season(pbp_df):
     pbp_df = pbp_df[pbp_df['posteam'].notna() & pbp_df['defteam'].notna()].copy()
     pbp_df['posteam'] = pbp_df['posteam'].replace(TEAM_ABBR_MAPPINGS)
     pbp_df['defteam'] = pbp_df['defteam'].replace(TEAM_ABBR_MAPPINGS)
+    pbp_df['penalty_team'] = pbp_df['penalty_team'].replace(TEAM_ABBR_MAPPINGS)
 
     play_components = _aggregate_play_components(pbp_df)
     drive_components = _aggregate_red_zone_components(pbp_df)
