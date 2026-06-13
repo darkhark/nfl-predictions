@@ -54,6 +54,10 @@ class BartBackwardElimination:
                 'replicate_scores': replicate_scores,
                 'features': list(features),
             })
+            # Persist after every iteration so a mid-run fit failure (real BART runs
+            # take ~20 minutes) leaves the completed iterations queryable instead of
+            # discarding them with the exception.
+            self.history = pd.DataFrame(rows)
             if len(features) <= self.min_features:
                 break
             drop_count = max(1, math.floor(self.drop_rate * len(features)))
@@ -62,7 +66,6 @@ class BartBackwardElimination:
             features = list(mean_ranks.sort_values(ascending=False)
                             .head(len(features) - drop_count).index)
             iteration += 1
-        self.history = pd.DataFrame(rows)
         return self.history
 
     def get_best_features(self):
@@ -83,6 +86,17 @@ class BartBackwardElimination:
             results = [self.fit_fn(list(features), seed) for seed in seeds]
 
         scores = [r['validation_score'] for r in results]
-        rank_frames = [r['variable_inclusion'].rank() for r in results]
+        candidate_index = pd.Index(features)
+        rank_frames = []
+        for result in results:
+            inclusion = result['variable_inclusion']
+            missing = candidate_index.difference(inclusion.index)
+            if len(missing) > 0:
+                raise ValueError(
+                    f'variable_inclusion is missing {len(missing)} candidate '
+                    f'features (e.g. {list(missing[:3])}); a partial Series would '
+                    f'silently mis-rank under NaN-skipping averaging'
+                )
+            rank_frames.append(inclusion.reindex(candidate_index).rank())
         mean_ranks = pd.concat(rank_frames, axis=1).mean(axis=1)
         return sum(scores) / len(scores), scores, mean_ranks

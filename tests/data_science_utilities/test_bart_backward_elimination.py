@@ -133,6 +133,39 @@ class TestBartBackwardElimination(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             rfe.get_best_features()
 
+    def test_partial_history_survives_fit_failure(self):
+        # A real BART run takes ~20 minutes; a crash in a late iteration must leave
+        # the completed iterations queryable on .history.
+        state = {'calls': 0}
+
+        def flaky_fit(features, seed):
+            state['calls'] += 1
+            if len(features) < 8:
+                raise RuntimeError('sampler crashed')
+            ordered = sorted(features)
+            return {'validation_score': 0.6,
+                    'variable_inclusion': pd.Series(
+                        {f: len(ordered) - i for i, f in enumerate(ordered)})}
+
+        rfe = BartBackwardElimination(flaky_fit, drop_rate=0.5, min_features=2,
+                                      replicates=1, max_workers=1)
+        with self.assertRaises(RuntimeError):
+            rfe.run(FEATURES_8)
+        self.assertIsNotNone(rfe.history)
+        self.assertEqual(list(rfe.history['num_features']), [8])
+
+    def test_incomplete_inclusion_series_raises(self):
+        def partial_fit(features, seed):
+            ordered = sorted(features)[:-1]  # drops one candidate from the Series
+            return {'validation_score': 0.6,
+                    'variable_inclusion': pd.Series(
+                        {f: len(ordered) - i for i, f in enumerate(ordered)})}
+
+        rfe = BartBackwardElimination(partial_fit, drop_rate=0.25, min_features=3,
+                                      replicates=1, max_workers=1)
+        with self.assertRaises(ValueError):
+            rfe.run(FEATURES_8)
+
 
 if __name__ == '__main__':
     unittest.main()
