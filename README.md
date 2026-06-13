@@ -308,9 +308,11 @@ metrics are tracked:
   at its lower skill. Open question for a future run: estimator-specific feature
   selection (RFE with BART importances, or BART on the run-9 57-set ∪ Phase 3 trench
   picks).
-- **Run 12 → 13:** extended RFE from 20 to 30 iterations so the CV curve actually
-  collapses instead of stopping while flat. It barely does: CV AUROC peaks at **0.6835
-  with 32 features** and only degrades below ~15 (0.673). The established tolerance
+- **Run 12 → 13:** extended RFE from 20 to 30 and then 40 iterations so the CV curve
+  actually collapses instead of stopping while flat. The full descent (down to 2
+  features): CV AUROC peaks at **0.6835 with 32 features**, holds above 0.67 through
+  13, breaks at 11 (0.659), and slides to 0.569 at 2 — so the usable range is roughly
+  13–60 features with a peak at 32, and single-digit sets are ruled out by CV alone. The established tolerance
   rule (smallest set within .005 of best) therefore picked **17 features** — but the
   hold-out disagreed sharply: 0.688 / 0.632 / Brier 0.2231, well below run 11's
   51-feature model (0.707/0.649/0.2206). **Methodology lesson:** when the RFE curve is
