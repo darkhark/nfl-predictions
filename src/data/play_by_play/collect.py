@@ -147,7 +147,10 @@ PLAY_COMPONENT_COLUMNS = [
     'third_down_count', 'third_down_conversion_sum',
     'xpass_play_count', 'pass_minus_xpass_sum',
 ] + DIRECTIONAL_COMPONENT_COLUMNS + PHASE3_PLAY_COMPONENT_COLUMNS
-DRIVE_COMPONENT_COLUMNS = ['red_zone_drive_count', 'red_zone_td_drive_count']
+DRIVE_COMPONENT_COLUMNS = [
+    'red_zone_drive_count', 'red_zone_td_drive_count',
+    'pace_seconds_sum', 'pace_play_count',
+]
 COMPONENT_COLUMNS = PLAY_COMPONENT_COLUMNS + DRIVE_COMPONENT_COLUMNS + PENALTY_COMPONENT_COLUMNS
 
 # (metric_name, numerator_component, denominator_component). Cumulative rates are always
@@ -163,7 +166,7 @@ RATE_METRICS = [
     ('third_down_conversion_rate', 'third_down_conversion_sum', 'third_down_count'),
     ('red_zone_td_rate', 'red_zone_td_drive_count', 'red_zone_drive_count'),
     ('proe', 'pass_minus_xpass_sum', 'xpass_play_count'),
-] + DIRECTIONAL_RATE_METRICS + PHASE3_RATE_METRICS + PENALTY_RATE_METRICS
+] + DIRECTIONAL_RATE_METRICS + PHASE3_RATE_METRICS + PENALTY_RATE_METRICS + PACE_RATE_METRICS
 
 
 def _assign_run_bucket(plays):
@@ -284,19 +287,25 @@ def _aggregate_play_components(pbp_df):
     )[PLAY_COMPONENT_COLUMNS].sum().reset_index()
 
 
-def _aggregate_red_zone_components(pbp_df):
+def _aggregate_drive_components(pbp_df):
     """
-    Count red-zone trips per team-week-context at the drive level: a drive counts as a
-    red-zone trip when any of its scrimmage plays starts at or inside the opponent's 20.
-    Only scrimmage plays (pass or rush) are considered: PAT and kickoff rows share the
-    drive's fixed_drive number at misleading yardlines (a PAT snapped at the 15 would
-    otherwise turn every long touchdown into a fake red-zone trip). A drive's context
-    comes from the win probability on its first scrimmage play (drives can drift across
-    contexts mid-drive; the first snap reflects the situation the drive started in).
-    Drives that enter the red zone only via a kick or kneel (e.g. driving to the 22 and
-    kicking a field goal from the 14) are intentionally excluded on both sides of the
-    red_zone_td_rate ratio. fixed_drive numbers drives across the whole game, so
-    (game_id, fixed_drive) is unique.
+    Drive-level components per team-week-context, over scrimmage plays only (pass or
+    rush): PAT and kickoff rows share the drive's fixed_drive number at misleading
+    yardlines (a PAT snapped at the 15 would otherwise turn every long touchdown into a
+    fake red-zone trip). A drive's context comes from the win probability on its first
+    scrimmage play.
+
+    Red zone: a drive counts as a trip when any of its scrimmage plays starts at or
+    inside the opponent's 20; drives that enter only via a kick or kneel are
+    intentionally excluded on both sides of the red_zone_td_rate ratio.
+
+    Pace: game-clock seconds elapsed between the drive's first and last scrimmage snap,
+    over its scrimmage snap count. This undercounts by the final play's duration
+    (n snaps bound n-1 intervals) — a consistent bias that cancels in cross-team
+    comparison. clip(lower=0) guards overtime clock quirks.
+
+    fixed_drive numbers drives across the whole game, so (game_id, fixed_drive) is
+    unique.
     """
     scrimmage = pbp_df[(pbp_df['pass'] == 1) | (pbp_df['rush'] == 1)]
     drive_plays = scrimmage[scrimmage['fixed_drive'].notna() & scrimmage['posteam'].notna()].sort_values('play_id')
@@ -304,14 +313,21 @@ def _aggregate_red_zone_components(pbp_df):
         min_yardline_100=('yardline_100', 'min'),
         first_play_wp=('wp', 'first'),
         drive_result=('fixed_drive_result', 'first'),
+        first_gsr=('game_seconds_remaining', 'first'),
+        last_gsr=('game_seconds_remaining', 'last'),
+        scrimmage_snaps=('play_id', 'count'),
     ).reset_index()
 
-    red_zone_drives = drives[drives['min_yardline_100'] <= RED_ZONE_YARDLINE].copy()
-    red_zone_drives[CONTEXT_COL] = _assign_wp_context(red_zone_drives['first_play_wp'])
-    red_zone_drives['red_zone_drive_count'] = 1
-    red_zone_drives['red_zone_td_drive_count'] = (red_zone_drives['drive_result'] == 'Touchdown').astype(int)
+    drives[CONTEXT_COL] = _assign_wp_context(drives['first_play_wp'])
+    reached_red_zone = drives['min_yardline_100'] <= RED_ZONE_YARDLINE
+    drives['red_zone_drive_count'] = reached_red_zone.astype(int)
+    drives['red_zone_td_drive_count'] = (
+        reached_red_zone & (drives['drive_result'] == 'Touchdown')
+    ).astype(int)
+    drives['pace_seconds_sum'] = (drives['first_gsr'] - drives['last_gsr']).clip(lower=0)
+    drives['pace_play_count'] = drives['scrimmage_snaps']
 
-    return red_zone_drives.groupby(
+    return drives.groupby(
         AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
     )[DRIVE_COMPONENT_COLUMNS].sum().reset_index()
 
@@ -390,7 +406,7 @@ def _aggregate_season(pbp_df):
     pbp_df['penalty_team'] = pbp_df['penalty_team'].replace(TEAM_ABBR_MAPPINGS)
 
     play_components = _aggregate_play_components(pbp_df)
-    drive_components = _aggregate_red_zone_components(pbp_df)
+    drive_components = _aggregate_drive_components(pbp_df)
     penalty_components = _aggregate_penalty_components(pbp_df)
     components = play_components.merge(
         drive_components, on=AGGREGATION_KEY_COLUMNS + [CONTEXT_COL], how='outer'

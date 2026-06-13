@@ -136,7 +136,7 @@ class TestAggregateRedZoneComponents(unittest.TestCase):
             make_play(play_id=4, fixed_drive=3, yardline_100=15.0, wp=0.97,
                       fixed_drive_result='Field goal', is_rush=1),
         ])
-        self.result = collect._aggregate_red_zone_components(plays)
+        self.result = collect._aggregate_drive_components(plays)
 
     def _row(self, context):
         return self.result[self.result[collect.CONTEXT_COL] == context].iloc[0]
@@ -160,7 +160,7 @@ class TestAggregateRedZoneComponents(unittest.TestCase):
             make_play(play_id=1, fixed_drive=1, yardline_100=45.0, wp=0.50,
                       fixed_drive_result='Touchdown', is_pass=1),
         ])
-        result = collect._aggregate_red_zone_components(plays)
+        result = collect._aggregate_drive_components(plays)
         self.assertEqual(result[collect.CONTEXT_COL].iloc[0], collect.COMPETITIVE)
 
     def test_non_scrimmage_rows_do_not_create_red_zone_trips(self):
@@ -172,8 +172,10 @@ class TestAggregateRedZoneComponents(unittest.TestCase):
             make_play(play_id=2, fixed_drive=1, yardline_100=15.0, wp=0.5,
                       fixed_drive_result='Touchdown'),  # PAT: neither pass nor rush
         ])
-        result = collect._aggregate_red_zone_components(plays)
-        self.assertTrue(result.empty)
+        result = collect._aggregate_drive_components(plays)
+        # the drive appears for pace purposes, but must contribute no red-zone trip
+        self.assertEqual(result['red_zone_drive_count'].sum(), 0)
+        self.assertEqual(result['pace_play_count'].sum(), 1)  # the scrimmage snap only
 
     def test_red_zone_trip_counted_once_despite_special_teams_rows(self):
         # A genuine red-zone touchdown drive still counts exactly once when the PAT row
@@ -184,7 +186,7 @@ class TestAggregateRedZoneComponents(unittest.TestCase):
             make_play(play_id=2, fixed_drive=1, yardline_100=15.0, wp=0.5,
                       fixed_drive_result='Touchdown'),  # PAT: neither pass nor rush
         ])
-        result = collect._aggregate_red_zone_components(plays)
+        result = collect._aggregate_drive_components(plays)
         self.assertEqual(result['red_zone_drive_count'].sum(), 1)
         self.assertEqual(result['red_zone_td_drive_count'].sum(), 1)
 
@@ -394,8 +396,8 @@ class TestGetPlayByPlayFeatures(unittest.TestCase):
         features = self._features()
         feature_cols = [col for col in features.columns
                         if col.startswith('off_') or col.startswith('def_opp_')]
-        # 49 metrics (10 aggregate + 26 directional + 9 phase-3 play + 4 penalty) x 3 x 2 x 3
-        self.assertEqual(len(feature_cols), 882)
+        # 50 metrics (10 aggregate + 26 directional + 9 phase-3 play + 4 penalty + 1 pace) x 3 x 2 x 3
+        self.assertEqual(len(feature_cols), 900)
         self.assertEqual(list(features.columns[:3]), ['team', 'season', 'week'])
 
     def test_offense_rank_one_is_best_epa(self):
@@ -446,9 +448,9 @@ class TestDirectionalConstants(unittest.TestCase):
             self.assertIn(column, collect.REQUIRED_PBP_COLUMNS)
 
     def test_directional_lists_wired_into_aggregates(self):
-        # 56 directional+aggregate + 12 phase-3 play + 4 penalty = 72; RATE_METRICS 36 + 9 + 4 = 49
-        self.assertEqual(len(collect.COMPONENT_COLUMNS), 72)
-        self.assertEqual(len(collect.RATE_METRICS), 49)
+        # 56 directional+aggregate + 12 phase-3 play + 4 penalty + 2 pace = 74; RATE_METRICS 36 + 9 + 4 + 1 = 50
+        self.assertEqual(len(collect.COMPONENT_COLUMNS), 74)
+        self.assertEqual(len(collect.RATE_METRICS), 50)
         for bucket in collect.DIRECTIONAL_BUCKETS:
             self.assertIn(f'{bucket}_attempt_count', collect.PLAY_COMPONENT_COLUMNS)
 
@@ -685,6 +687,43 @@ class TestPenaltyComponents(unittest.TestCase):
         row = season[season['team'] == 'LAC'].iloc[0]
         self.assertEqual(row['pen_committed_count_competitive'], 1)
         self.assertEqual(row['pen_committed_yards_sum_competitive'], 10.0)
+
+
+class TestPaceComponents(unittest.TestCase):
+
+    def test_seconds_and_snaps_accumulate_per_drive(self):
+        plays = pd.DataFrame([
+            # drive 1: three snaps, first at 3600s, last at 3500s -> 100 elapsed, 3 snaps
+            make_play(play_id=1, fixed_drive=1, is_pass=1, epa=0.1,
+                      game_seconds_remaining=3600.0),
+            make_play(play_id=2, fixed_drive=1, is_rush=1, epa=0.1,
+                      game_seconds_remaining=3560.0),
+            make_play(play_id=3, fixed_drive=1, is_pass=1, epa=0.1,
+                      game_seconds_remaining=3500.0),
+            # drive 2: one snap -> 0 elapsed, 1 snap
+            make_play(play_id=4, fixed_drive=2, is_rush=1, epa=0.1,
+                      game_seconds_remaining=3300.0),
+        ])
+        result = collect._aggregate_drive_components(plays)
+        row = result.iloc[0]
+        self.assertEqual(row['pace_seconds_sum'], 100.0)
+        self.assertEqual(row['pace_play_count'], 4)
+
+    def test_every_drive_contributes_pace_but_only_deep_drives_count_red_zone(self):
+        plays = pd.DataFrame([
+            make_play(play_id=1, fixed_drive=1, is_pass=1, yardline_100=60.0, epa=0.1,
+                      game_seconds_remaining=3600.0),
+            make_play(play_id=2, fixed_drive=1, is_rush=1, yardline_100=15.0, epa=0.1,
+                      game_seconds_remaining=3550.0, fixed_drive_result='Touchdown'),
+        ])
+        # make both rows agree on the drive result, as real data does
+        plays.loc[0, 'fixed_drive_result'] = 'Touchdown'
+        result = collect._aggregate_drive_components(plays)
+        row = result.iloc[0]
+        self.assertEqual(row['red_zone_drive_count'], 1)
+        self.assertEqual(row['red_zone_td_drive_count'], 1)
+        self.assertEqual(row['pace_seconds_sum'], 50.0)
+        self.assertEqual(row['pace_play_count'], 2)
 
 
 if __name__ == '__main__':
