@@ -28,12 +28,17 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
         self.importances = None
 
     def get_optimal_features_no_grouped_records(self, drop_rate=.1, max_iter=10, verbose=0, base_margin=None,
-                                                n_folds=5, min_features=None):
+                                                n_folds=5, min_features=None, on_iteration=None):
         """
         Run cross-validated RFE for up to max_iter iterations, dropping drop_rate of the
         surviving features each round. When min_features is set, the drop is clamped so
         the feature count never falls below it and the loop stops once it is reached —
         the same floor semantics as BartBackwardElimination.
+
+        on_iteration, when provided, is called after each completed iteration with a
+        dict (iteration, max_iter, num_features, score). Headless nbconvert buffers a
+        cell's stdout until the cell finishes, so callers wanting LIVE progress should
+        have the callback write to a sidecar file rather than rely on verbose prints.
         """
         max_iter = min(max_iter, len(self.features))
         train_features = self.features
@@ -66,6 +71,13 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
                     self.all_models[len(train_features)] = {fold: model}
                     self.test_preds[len(train_features)] = {fold: test_preds}
             self.all_model_scores.append(np.mean(model_scores))
+            if on_iteration is not None:
+                on_iteration({
+                    'iteration': i + 1,
+                    'max_iter': max_iter,
+                    'num_features': len(train_features),
+                    'score': self.all_model_scores[-1],
+                })
             if min_features is not None and len(train_features) <= min_features:
                 break
             if i == 0:

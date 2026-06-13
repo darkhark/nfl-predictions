@@ -55,6 +55,19 @@ class TestMinFeaturesFloor(unittest.TestCase):
         # no floor: runs all max_iter iterations exactly as before
         self.assertEqual(len(rfe.all_model_scores), 4)
 
+    def test_on_iteration_callback_streams_progress(self):
+        X, y = make_synthetic_frame()
+        rfe = ClassifierCrossValidationRecursiveFeatureSelection(X, y, dict(FAST_XGB_PARAMS))
+        seen = []
+        rfe.get_optimal_features_no_grouped_records(
+            drop_rate=0.3, max_iter=3, n_folds=3, on_iteration=seen.append
+        )
+        self.assertEqual(len(seen), 3)
+        self.assertEqual(seen[0]['iteration'], 1)
+        self.assertEqual(seen[0]['max_iter'], 3)
+        self.assertIn('score', seen[0])
+        self.assertIn('num_features', seen[0])
+
 
 if __name__ == '__main__':
     unittest.main()
