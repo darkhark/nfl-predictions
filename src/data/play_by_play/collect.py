@@ -301,8 +301,10 @@ def _aggregate_drive_components(pbp_df):
 
     Pace: game-clock seconds elapsed between the drive's first and last scrimmage snap,
     over its scrimmage snap count. This undercounts by the final play's duration
-    (n snaps bound n-1 intervals) — a consistent bias that cancels in cross-team
-    comparison. clip(lower=0) guards overtime clock quirks.
+    (n snaps bound n-1 intervals — at the league's ~6 snaps/drive that reads ~16% below
+    a true per-snap clock) and covers scrimmage snaps only. The bias is consistent
+    across teams, so the within-week ranks the model consumes are unaffected.
+    clip(lower=0) guards overtime clock quirks (verified never firing on real data).
 
     fixed_drive numbers drives across the whole game, so (game_id, fixed_drive) is
     unique.
