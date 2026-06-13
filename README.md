@@ -169,6 +169,7 @@ metrics are tracked:
 | 10 | 2026-06-12 | **BART** on the run-9 directional feature set | 57 | **0.708** | 0.654 | **0.2185** |
 | 11 | 2026-06-12 | Rank-only + **Phase 3 features** (trenches, luck, tendencies, penalties, pace), XGBoost | 51 | **0.707** | 0.649 | 0.2206 |
 | 12 | 2026-06-12 | **BART** on the run-11 Phase 3 feature set | 51 | 0.699 | 0.651 | 0.2207 |
+| 13 | 2026-06-12 | Extended RFE (30 iter, curve collapses at ~15), tolerance rule picks 17, XGBoost | 17 | 0.688 | 0.632 | 0.2231 |
 
 **What changed between runs**
 
@@ -307,6 +308,17 @@ metrics are tracked:
   at its lower skill. Open question for a future run: estimator-specific feature
   selection (RFE with BART importances, or BART on the run-9 57-set ∪ Phase 3 trench
   picks).
+- **Run 12 → 13:** extended RFE from 20 to 30 iterations so the CV curve actually
+  collapses instead of stopping while flat. It barely does: CV AUROC peaks at **0.6835
+  with 32 features** and only degrades below ~15 (0.673). The established tolerance
+  rule (smallest set within .005 of best) therefore picked **17 features** — but the
+  hold-out disagreed sharply: 0.688 / 0.632 / Brier 0.2231, well below run 11's
+  51-feature model (0.707/0.649/0.2206). **Methodology lesson:** when the RFE curve is
+  flat across a wide range, CV cannot distinguish set sizes and "smallest within
+  tolerance" over-shrinks — small sets carry hold-out variance that CV doesn't price.
+  Future selections should prefer the CV-peak count (or a 1-SE-style rule) over
+  aggressive minimalism. 9 of the 17 survivors were play-by-play features (4 Phase 3,
+  3 directional, 2 Phase 1), consistent with the pbp families carrying real signal.
 
 ## Roadmap
 
