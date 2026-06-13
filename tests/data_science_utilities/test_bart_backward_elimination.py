@@ -166,6 +166,15 @@ class TestBartBackwardElimination(unittest.TestCase):
         with self.assertRaises(ValueError):
             rfe.run(FEATURES_8)
 
+    def test_on_iteration_callback_receives_each_completed_row(self):
+        rows_seen = []
+        rfe = BartBackwardElimination(make_fit_fn(), drop_rate=0.5, min_features=4,
+                                      replicates=1, max_workers=1,
+                                      on_iteration=rows_seen.append)
+        rfe.run(FEATURES_8)
+        self.assertEqual([row['num_features'] for row in rows_seen], [8, 4])
+        self.assertIn('validation_score', rows_seen[0])
+
 
 if __name__ == '__main__':
     unittest.main()

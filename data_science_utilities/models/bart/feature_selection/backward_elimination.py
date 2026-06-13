@@ -28,13 +28,17 @@ class BartBackwardElimination:
     """
 
     def __init__(self, fit_fn, drop_rate=0.2, min_features=10, replicates=2,
-                 max_workers=2, base_seed=32):
+                 max_workers=2, base_seed=32, on_iteration=None):
         self.fit_fn = fit_fn
         self.drop_rate = drop_rate
         self.min_features = min_features
         self.replicates = replicates
         self.max_workers = max_workers
         self.base_seed = base_seed
+        # Called with each completed history row (dict). Headless nbconvert buffers a
+        # cell's stdout until the cell finishes, so callers that want LIVE progress
+        # should write to a sidecar file here rather than print.
+        self.on_iteration = on_iteration
         self.history = None
 
     def run(self, features):
@@ -58,6 +62,8 @@ class BartBackwardElimination:
             # take ~20 minutes) leaves the completed iterations queryable instead of
             # discarding them with the exception.
             self.history = pd.DataFrame(rows)
+            if self.on_iteration is not None:
+                self.on_iteration(rows[-1])
             if len(features) <= self.min_features:
                 break
             drop_count = max(1, math.floor(self.drop_rate * len(features)))
