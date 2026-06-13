@@ -324,6 +324,8 @@ def _aggregate_penalty_components(pbp_df):
     (penalty_team == posteam); drawn = flagged on the defense (penalty_team == defteam).
     The matching rates use scrimmage play_count as the denominator, so they read as
     "penalties per offensive snap". NaN penalty values compare False and are ignored.
+    Note: nflfastR's penalty flag covers ACCEPTED penalties only (declined/offsetting
+    are unflagged), so these rates read low vs league totals that include declined.
     """
     penalties = pbp_df[
         (pbp_df['penalty'] == 1)
