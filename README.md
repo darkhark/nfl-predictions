@@ -169,6 +169,8 @@ metrics are tracked:
 | 10 | 2026-06-12 | **BART** on the run-9 directional feature set | 57 | **0.708** | 0.654 | **0.2185** |
 | 11 | 2026-06-12 | Rank-only + **Phase 3 features** (trenches, luck, tendencies, penalties, pace), XGBoost | 51 | **0.707** | 0.649 | 0.2206 |
 | 12 | 2026-06-12 | **BART** on the run-11 Phase 3 feature set | 51 | 0.699 | 0.651 | 0.2207 |
+| 13 | 2026-06-12 | Extended RFE (30 iter, curve collapses at ~15), tolerance rule picks 17, XGBoost | 17 | 0.688 | 0.632 | 0.2231 |
+| 14 | 2026-06-13 | **BART backward-elimination** on BART's own `variable_inclusion` (peak at 32), BART | 32 | 0.705 | 0.658 | 0.2190 |
 
 **What changed between runs**
 
@@ -307,14 +309,54 @@ metrics are tracked:
   at its lower skill. Open question for a future run: estimator-specific feature
   selection (RFE with BART importances, or BART on the run-9 57-set ∪ Phase 3 trench
   picks).
+- **Run 12 → 13:** extended RFE from 20 to 30 and then 40 iterations so the CV curve
+  actually collapses instead of stopping while flat. The full descent (down to 2
+  features): CV AUROC peaks at **0.6835 with 32 features**, holds above 0.67 through
+  13, breaks at 11 (0.659), and slides to 0.569 at 2 — so the usable range is roughly
+  13–60 features with a peak at 32, and single-digit sets are ruled out by CV alone. The established tolerance
+  rule (smallest set within .005 of best) therefore picked **17 features** — but the
+  hold-out disagreed sharply: 0.688 / 0.632 / Brier 0.2231, well below run 11's
+  51-feature model (0.707/0.649/0.2206). **Methodology lesson:** when the RFE curve is
+  flat across a wide range, CV cannot distinguish set sizes and "smallest within
+  tolerance" over-shrinks — small sets carry hold-out variance that CV doesn't price.
+  Future selections should prefer the CV-peak count (or a 1-SE-style rule) over
+  aggressive minimalism. 9 of the 17 survivors were play-by-play features (4 Phase 3,
+  3 directional, 2 Phase 1), consistent with the pbp families carrying real signal.
+- **Run 13 → 14:** estimator-specific selection at last — `BartBackwardElimination`
+  (`data_science_utilities/models/bart/`) drives elimination by BART's OWN
+  `variable_inclusion`, re-measured every iteration, with six parallel seed-replicate
+  fits to tame PGBART noise (the replicate spread was ~0.007 per iteration; averaging
+  six cuts it to ~0.003). Starting from a generous 91-feature pre-filter and selecting
+  by the validation-curve peak (the run-13 lesson), **BART's curve peaks at 32
+  features** — the *exact* count XGBoost's CV curve peaked at, reached by a completely
+  different mechanism (gain-RFE vs inclusion backward-elimination). The two 32-sets
+  overlap only 17/32, though: same dimensionality, different composition — and BART's
+  leans far more on box-score/aggregate ranks (23 of 32) than XGBoost's pbp-heavy set.
+  Hold-out: **ROC-AUC 0.705, accuracy 0.658, Brier 0.2190.** This decisively beats
+  run 12 (BART on the XGBoost-selected 51-set: 0.699 / 0.2207), confirming that run-12's
+  regression was largely a selection-mismatch artifact — giving BART features chosen by
+  BART recovers it. It also essentially ties the run-10 champion (0.708 / 0.2185) within
+  PGBART's ~±0.004 wobble, but with **25 fewer features** — the more parsimonious model
+  for the same skill. Width-stratified Brier is monotone except a minor q3/widest
+  inversion at the noisy tail (0.167 / 0.218 / 0.248 / 0.243). Takeaway: ~32 features is
+  a real signal core both estimators find independently; estimator-matched selection
+  matters for BART; and we are firmly on a ~0.705–0.708 / ~0.219 Brier plateau that five
+  feature generations and two estimators have not broken — the ceiling now looks like a
+  data/regime limit, not a feature-engineering one.
 
 ## Roadmap
 
-- Improve predictive performance toward / past a Vegas-implied baseline.
-- Play-by-play Phase 3 (trenches, turnover luck, tendencies — see the spec in
-  `docs/superpowers/specs/` and phase plans in `docs/superpowers/plans/`) and Next Gen
-  Stats integration at the weekly grain; calibration pass on the run-10 BART champion
-  (best AUROC/Brier but 0.5-threshold accuracy lags — calibration may recover it).
+- Improve predictive performance toward / past a Vegas-implied baseline. Five feature
+  generations (runs 5–14) across two estimators have plateaued at ~0.705–0.708 ROC-AUC /
+  ~0.219 Brier, so the next lever is likely market signal (de-vigged moneyline-implied
+  probabilities as features and as the comparison baseline) rather than more box/pbp
+  features — the `schedule` collector already supports `keep_odds=True`.
+- Calibration pass on the run-10 / run-14 BART models (best AUROC/Brier but 0.5-threshold
+  accuracy lags — calibration may recover it) and Next Gen Stats integration at the
+  weekly grain.
+- Faster estimator-matched selection (run 14 follow-up): a cheap 1–2-replicate BART
+  backward pass for the ranking + curve shape, then a fully-parallel multi-replicate
+  size-sweep in the ~24–45 promising region, instead of replicating every step.
 - Extend the Bayesian comparison (BART baseline done — run 6): more chains/draws, prior
   sensitivity, and using posterior uncertainty for bet-sizing-style decision rules.
 - Address known `TODO`s: prevent season-average leakage in the NGS diff features, and move
