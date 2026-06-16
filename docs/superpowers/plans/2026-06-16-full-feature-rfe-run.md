@@ -17,6 +17,14 @@
   `notebooks/model_training/predict_games/schedule_and_weekly/cross_validation/`
 - Edit notebook cells with the **NotebookEdit** tool (`cell_id` = the 0-based index shown by the inspection snippet in each task; pass the **full new cell source**). Do **not** hand-edit the JSON.
 - These runs take **hours**. Execute with `run_in_background: true` and poll the sidecar logs; do not block.
+- **Environment (REQUIRED for headless runs):** the notebooks run in the conda env `nfl-predictions`. Use its jupyter binary `/opt/homebrew/Caskroom/miniforge/base/envs/nfl-predictions/bin/jupyter`, and **prepend `PYTHONPATH=/Users/joshuaharkness/ClaudeProjects/nfl-predictions`** to every `nbconvert` invocation. Reason: `rfe.ipynb` cell 0 only adds `..` to `sys.path` (resolves to `schedule_and_weekly/`, not the repo root where `data_science_utilities` lives) — it works interactively because Jupyter is launched from the repo root, but headless nbconvert fails with `ModuleNotFoundError: No module named 'data_science_utilities'` unless `PYTHONPATH` supplies the repo root. Add `--ExecutePreprocessor.kernel_name=python3 --ExecutePreprocessor.timeout=-1`. The data paths (`../../../../../data/...`) already resolve because nbconvert sets CWD to the notebook's directory. Canonical form:
+  ```bash
+  cd notebooks/model_training/predict_games/schedule_and_weekly/cross_validation
+  PYTHONPATH=/Users/joshuaharkness/ClaudeProjects/nfl-predictions \
+    /opt/homebrew/Caskroom/miniforge/base/envs/nfl-predictions/bin/jupyter nbconvert \
+    --to notebook --execute --inplace <notebook>.ipynb \
+    --ExecutePreprocessor.kernel_name=python3 --ExecutePreprocessor.timeout=-1 > /tmp/<log>.out 2>&1
+  ```
 - This is not classic unit-test TDD — the "test" before each long run is a **config echo**: run only the cheap setup cells and confirm the feature count printed matches expectations *before* committing the machine to a multi-hour fit. Per the project's "verify notebook executions" rule, a stale config silently produces the wrong run.
 
 ## File Structure
