@@ -22,12 +22,26 @@ CONTEXT_COL = 'wp_context'
 # makes PROE NaN there by the zero-denominator rule. pass_location/pass_length are
 # fully null before 2006 too (directional pass features go NaN there the same way);
 # run_location is ~95% populated on rushes in all eras, run_gap ~70% (middle runs
-# have no gap by definition).
+# have no gap by definition). Phase 3: sack/qb_hit/qb_scramble/shotgun/no_huddle/
+# fumble/fumble_lost are ~99.9% populated on universe rows in all eras (the rare NaN
+# are EPA-valued plays with nullified yardage; groupby-sum skips them so counts are
+# unaffected). CAUTION: qb_hit is zero-FILLED (not NaN) before 2006 when hit charting
+# began, so qb_hit_rate is a literal 0.0 for 2003-2005, not NaN — within-season ranks
+# are unaffected (everyone ties), but the raw rate is not comparable across that era
+# boundary. game_seconds_remaining is ~99.9% non-null over all rows; cpoe and
+# yards_after_catch/xyac_mean_yardage are null
+# before 2006 (CPOE and YAC-over-expected go NaN there); penalty is ~97% non-null
+# (compare with == 1, which is False for NaN), penalty_team is always set on penalty
+# rows, penalty_yards may be NaN.
 REQUIRED_PBP_COLUMNS = [
     'posteam', 'defteam', 'season', 'week', 'season_type', 'play_id', 'game_id',
     'pass', 'rush', 'down', 'yardline_100', 'third_down_converted', 'success',
     'epa', 'wp', 'xpass', 'fixed_drive', 'fixed_drive_result',
     'yards_gained', 'run_location', 'run_gap', 'pass_location', 'pass_length',
+    'sack', 'qb_hit', 'qb_scramble', 'shotgun', 'no_huddle',
+    'fumble', 'fumble_lost', 'cpoe', 'complete_pass',
+    'yards_after_catch', 'xyac_mean_yardage',
+    'penalty', 'penalty_team', 'penalty_yards', 'game_seconds_remaining',
 ]
 
 COMPETITIVE = 'competitive'
@@ -80,6 +94,51 @@ DIRECTIONAL_RATE_METRICS = (
        for bucket in DIRECTIONAL_BUCKETS]
 )
 
+# Phase 3: trenches, turnover luck, and tendency components. Sacks/hits/scrambles are
+# per dropback, stuffs per carry, fumble-recovery luck per fumble; cpoe and
+# YAC-over-expected average only over plays where nflfastR charts them (2006+ —
+# their zero denominators make the rates NaN before that). qb_hit_rate is the one
+# era asymmetry: zero-filled pre-2006, so it reads 0.0 rather than NaN there.
+PHASE3_PLAY_COMPONENT_COLUMNS = [
+    'sack_count', 'qb_hit_count', 'stuff_count',
+    'fumble_sum', 'fumble_lost_sum',
+    'scramble_count', 'shotgun_count', 'no_huddle_count',
+    'cpoe_sum', 'cpoe_play_count',
+    'yac_minus_xyac_sum', 'xyac_play_count',
+]
+
+# Penalties live partly on no-play rows outside the pass/rush universe, so they get
+# their own aggregation pass. Committed = by the offense (penalty_team == posteam);
+# drawn = by the defense against it (penalty_team == defteam). Rates are per
+# scrimmage play (play_count denominator).
+PENALTY_COMPONENT_COLUMNS = [
+    'pen_committed_count', 'pen_committed_yards_sum',
+    'pen_drawn_count', 'pen_drawn_yards_sum',
+]
+
+PHASE3_RATE_METRICS = [
+    ('sack_rate', 'sack_count', 'dropback_count'),
+    ('qb_hit_rate', 'qb_hit_count', 'dropback_count'),
+    ('scramble_rate', 'scramble_count', 'dropback_count'),
+    ('stuff_rate', 'stuff_count', 'rush_count'),
+    ('fumble_lost_rate', 'fumble_lost_sum', 'fumble_sum'),
+    ('shotgun_rate', 'shotgun_count', 'play_count'),
+    ('no_huddle_rate', 'no_huddle_count', 'play_count'),
+    ('cpoe', 'cpoe_sum', 'cpoe_play_count'),
+    ('yac_over_expected', 'yac_minus_xyac_sum', 'xyac_play_count'),
+]
+PENALTY_RATE_METRICS = [
+    ('pen_committed_rate', 'pen_committed_count', 'play_count'),
+    ('pen_committed_yards_per_play', 'pen_committed_yards_sum', 'play_count'),
+    ('pen_drawn_rate', 'pen_drawn_count', 'play_count'),
+    ('pen_drawn_yards_per_play', 'pen_drawn_yards_sum', 'play_count'),
+]
+# pace_seconds_sum / pace_play_count are drive-level components and live in
+# DRIVE_COMPONENT_COLUMNS (wired by the drive-aggregation task), not in a PACE_* list.
+PACE_RATE_METRICS = [
+    ('seconds_per_play', 'pace_seconds_sum', 'pace_play_count'),
+]
+
 PLAY_COMPONENT_COLUMNS = [
     'play_count', 'epa_sum', 'success_sum',
     'dropback_count', 'dropback_epa_sum', 'dropback_success_sum',
@@ -87,9 +146,12 @@ PLAY_COMPONENT_COLUMNS = [
     'early_down_count', 'early_down_success_sum',
     'third_down_count', 'third_down_conversion_sum',
     'xpass_play_count', 'pass_minus_xpass_sum',
-] + DIRECTIONAL_COMPONENT_COLUMNS
-DRIVE_COMPONENT_COLUMNS = ['red_zone_drive_count', 'red_zone_td_drive_count']
-COMPONENT_COLUMNS = PLAY_COMPONENT_COLUMNS + DRIVE_COMPONENT_COLUMNS
+] + DIRECTIONAL_COMPONENT_COLUMNS + PHASE3_PLAY_COMPONENT_COLUMNS
+DRIVE_COMPONENT_COLUMNS = [
+    'red_zone_drive_count', 'red_zone_td_drive_count',
+    'pace_seconds_sum', 'pace_play_count',
+]
+COMPONENT_COLUMNS = PLAY_COMPONENT_COLUMNS + DRIVE_COMPONENT_COLUMNS + PENALTY_COMPONENT_COLUMNS
 
 # (metric_name, numerator_component, denominator_component). Cumulative rates are always
 # cumsum(numerator) / cumsum(denominator) so sparse weeks accumulate correctly.
@@ -104,7 +166,7 @@ RATE_METRICS = [
     ('third_down_conversion_rate', 'third_down_conversion_sum', 'third_down_count'),
     ('red_zone_td_rate', 'red_zone_td_drive_count', 'red_zone_drive_count'),
     ('proe', 'pass_minus_xpass_sum', 'xpass_play_count'),
-] + DIRECTIONAL_RATE_METRICS
+] + DIRECTIONAL_RATE_METRICS + PHASE3_RATE_METRICS + PENALTY_RATE_METRICS + PACE_RATE_METRICS
 
 
 def _assign_run_bucket(plays):
@@ -197,24 +259,55 @@ def _aggregate_play_components(pbp_df):
         plays[f'{bucket}_yards_sum'] = yards * in_bucket
         plays[f'{bucket}_explosive_count'] = is_explosive.astype(int) * in_bucket
 
+    plays['sack_count'] = plays['sack']
+    plays['qb_hit_count'] = plays['qb_hit']
+    # NaN yards_gained must not count as a stuff: the raw column comparison is False
+    # for NaN, unlike the zero-filled `yards` used for explosives above.
+    plays['stuff_count'] = ((plays['rush'] == 1) & (plays['yards_gained'] <= 0)).astype(int)
+    plays['fumble_sum'] = plays['fumble']
+    plays['fumble_lost_sum'] = plays['fumble_lost']
+    plays['scramble_count'] = plays['qb_scramble']
+    plays['shotgun_count'] = plays['shotgun']
+    plays['no_huddle_count'] = plays['no_huddle']
+    has_cpoe = plays['cpoe'].notna()
+    plays['cpoe_play_count'] = has_cpoe.astype(int)
+    plays['cpoe_sum'] = plays['cpoe'].where(has_cpoe, 0)
+    has_xyac = (
+        (plays['complete_pass'] == 1)
+        & plays['xyac_mean_yardage'].notna()
+        & plays['yards_after_catch'].notna()
+    )
+    plays['xyac_play_count'] = has_xyac.astype(int)
+    plays['yac_minus_xyac_sum'] = (
+        plays['yards_after_catch'] - plays['xyac_mean_yardage']
+    ).where(has_xyac, 0)
+
     return plays.groupby(
         AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
     )[PLAY_COMPONENT_COLUMNS].sum().reset_index()
 
 
-def _aggregate_red_zone_components(pbp_df):
+def _aggregate_drive_components(pbp_df):
     """
-    Count red-zone trips per team-week-context at the drive level: a drive counts as a
-    red-zone trip when any of its scrimmage plays starts at or inside the opponent's 20.
-    Only scrimmage plays (pass or rush) are considered: PAT and kickoff rows share the
-    drive's fixed_drive number at misleading yardlines (a PAT snapped at the 15 would
-    otherwise turn every long touchdown into a fake red-zone trip). A drive's context
-    comes from the win probability on its first scrimmage play (drives can drift across
-    contexts mid-drive; the first snap reflects the situation the drive started in).
-    Drives that enter the red zone only via a kick or kneel (e.g. driving to the 22 and
-    kicking a field goal from the 14) are intentionally excluded on both sides of the
-    red_zone_td_rate ratio. fixed_drive numbers drives across the whole game, so
-    (game_id, fixed_drive) is unique.
+    Drive-level components per team-week-context, over scrimmage plays only (pass or
+    rush): PAT and kickoff rows share the drive's fixed_drive number at misleading
+    yardlines (a PAT snapped at the 15 would otherwise turn every long touchdown into a
+    fake red-zone trip). A drive's context comes from the win probability on its first
+    scrimmage play.
+
+    Red zone: a drive counts as a trip when any of its scrimmage plays starts at or
+    inside the opponent's 20; drives that enter only via a kick or kneel are
+    intentionally excluded on both sides of the red_zone_td_rate ratio.
+
+    Pace: game-clock seconds elapsed between the drive's first and last scrimmage snap,
+    over its scrimmage snap count. This undercounts by the final play's duration
+    (n snaps bound n-1 intervals — at the league's ~6 snaps/drive that reads ~16% below
+    a true per-snap clock) and covers scrimmage snaps only. The bias is consistent
+    across teams, so the within-week ranks the model consumes are unaffected.
+    clip(lower=0) guards overtime clock quirks (verified never firing on real data).
+
+    fixed_drive numbers drives across the whole game, so (game_id, fixed_drive) is
+    unique.
     """
     scrimmage = pbp_df[(pbp_df['pass'] == 1) | (pbp_df['rush'] == 1)]
     drive_plays = scrimmage[scrimmage['fixed_drive'].notna() & scrimmage['posteam'].notna()].sort_values('play_id')
@@ -222,16 +315,54 @@ def _aggregate_red_zone_components(pbp_df):
         min_yardline_100=('yardline_100', 'min'),
         first_play_wp=('wp', 'first'),
         drive_result=('fixed_drive_result', 'first'),
+        first_gsr=('game_seconds_remaining', 'first'),
+        last_gsr=('game_seconds_remaining', 'last'),
+        scrimmage_snaps=('play_id', 'count'),
     ).reset_index()
 
-    red_zone_drives = drives[drives['min_yardline_100'] <= RED_ZONE_YARDLINE].copy()
-    red_zone_drives[CONTEXT_COL] = _assign_wp_context(red_zone_drives['first_play_wp'])
-    red_zone_drives['red_zone_drive_count'] = 1
-    red_zone_drives['red_zone_td_drive_count'] = (red_zone_drives['drive_result'] == 'Touchdown').astype(int)
+    drives[CONTEXT_COL] = _assign_wp_context(drives['first_play_wp'])
+    reached_red_zone = drives['min_yardline_100'] <= RED_ZONE_YARDLINE
+    drives['red_zone_drive_count'] = reached_red_zone.astype(int)
+    drives['red_zone_td_drive_count'] = (
+        reached_red_zone & (drives['drive_result'] == 'Touchdown')
+    ).astype(int)
+    drives['pace_seconds_sum'] = (drives['first_gsr'] - drives['last_gsr']).clip(lower=0)
+    drives['pace_play_count'] = drives['scrimmage_snaps']
 
-    return red_zone_drives.groupby(
+    return drives.groupby(
         AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
     )[DRIVE_COMPONENT_COLUMNS].sum().reset_index()
+
+
+def _aggregate_penalty_components(pbp_df):
+    """
+    Count penalties per team-week-context over ALL rows with teams attached: accepted
+    penalties frequently live on no-play rows outside the pass/rush universe, so this is
+    a separate aggregation pass (like drives). Committed = flagged on the offense
+    (penalty_team == posteam); drawn = flagged on the defense (penalty_team == defteam).
+    The matching rates use scrimmage play_count as the denominator, so they read as
+    "penalties per offensive snap". NaN penalty values compare False and are ignored.
+    Note: nflfastR's penalty flag covers ACCEPTED penalties only (declined/offsetting
+    are unflagged), so these rates read low vs league totals that include declined.
+    """
+    penalties = pbp_df[
+        (pbp_df['penalty'] == 1)
+        & pbp_df['posteam'].notna()
+        & pbp_df['defteam'].notna()
+    ].copy()
+    penalties[CONTEXT_COL] = _assign_wp_context(penalties['wp'])
+
+    committed = penalties['penalty_team'] == penalties['posteam']
+    drawn = penalties['penalty_team'] == penalties['defteam']
+    yards = penalties['penalty_yards'].fillna(0)
+    penalties['pen_committed_count'] = committed.astype(int)
+    penalties['pen_committed_yards_sum'] = yards * committed
+    penalties['pen_drawn_count'] = drawn.astype(int)
+    penalties['pen_drawn_yards_sum'] = yards * drawn
+
+    return penalties.groupby(
+        AGGREGATION_KEY_COLUMNS + [CONTEXT_COL]
+    )[PENALTY_COMPONENT_COLUMNS].sum().reset_index()
 
 
 def _validate_required_columns(pbp_df):
@@ -274,14 +405,19 @@ def _aggregate_season(pbp_df):
     pbp_df = pbp_df[pbp_df['posteam'].notna() & pbp_df['defteam'].notna()].copy()
     pbp_df['posteam'] = pbp_df['posteam'].replace(TEAM_ABBR_MAPPINGS)
     pbp_df['defteam'] = pbp_df['defteam'].replace(TEAM_ABBR_MAPPINGS)
+    pbp_df['penalty_team'] = pbp_df['penalty_team'].replace(TEAM_ABBR_MAPPINGS)
 
     play_components = _aggregate_play_components(pbp_df)
-    drive_components = _aggregate_red_zone_components(pbp_df)
+    drive_components = _aggregate_drive_components(pbp_df)
+    penalty_components = _aggregate_penalty_components(pbp_df)
     components = play_components.merge(
         drive_components, on=AGGREGATION_KEY_COLUMNS + [CONTEXT_COL], how='outer'
+    ).merge(
+        penalty_components, on=AGGREGATION_KEY_COLUMNS + [CONTEXT_COL], how='outer'
     )
     # Fill only the component columns: a side missing from the outer merge means zero
-    # plays/drives, and restricting the fill keeps pandas from object-downcasting keys.
+    # plays/drives/penalties, and restricting the fill keeps pandas from
+    # object-downcasting keys.
     components[COMPONENT_COLUMNS] = components[COMPONENT_COLUMNS].fillna(0)
     components = components.rename(columns={'posteam': TEAM_COL, 'defteam': OPPONENT_TEAM_COL})
     return _pivot_context_components(components)
