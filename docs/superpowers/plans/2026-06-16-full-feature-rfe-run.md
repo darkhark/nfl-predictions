@@ -129,8 +129,8 @@ for c in nb['cells']:
             if m: print('model_inputs_df shape rows/cols:', m.group(1), m.group(2))
 " || echo "If this errors or times out on the RFE cell, instead add a temporary debug print of len(candidate_features) and re-run only cells 0-5."
 ```
-Simpler robust alternative (recommended): temporarily add `print('CANDIDATE FEATURES:', len(candidate_features))` to the end of cell 5, run cells 0–5 only via a scratch script, confirm it prints **≈ 2348** (vs 91 for rank-only), then remove the debug print.
-Expected: candidate feature count ≈ **2348**. If it prints ≈ 91, the flag edit did not take — fix cell 5 before proceeding.
+Simpler robust alternative (recommended): replicate cell 5's filter in a standalone script (read `xgb_features_list.csv`, apply the filter), confirm it prints **≈ 2349** for the full set (vs **≈ 1529** for rank-only), then proceed.
+Expected: candidate feature count ≈ **2349**. If it prints ≈ 1529, the flag edit did not take — fix cell 5 before proceeding. (Rank-only keeps 1,529 features, not the ~91 in earlier notes — 91 is BART's start-pool row, a different number.)
 
 - [ ] **Step 6: Commit the config change**
 
@@ -185,7 +185,7 @@ print('rows (model sizes):', list(df.index)[:3], '...', list(df.index)[-3:])
 print('max size:', max(df.index), ' min size:', min(df.index))
 "
 ```
-Expected: no traceback; the CSV exists; index max ≈ **2348** (proves the full set ran) and min ≈ **5** (proves it reached the floor). If max ≈ 91, the rank-only set ran — Task 1 Step 2 failed; fix and re-run.
+Expected: no traceback; the CSV exists; index max ≈ **2349** (proves the full set ran) and min ≈ **5** (proves it reached the floor). If max ≈ 1529, the rank-only set ran — Task 1 Step 2 failed; fix and re-run.
 
 - [ ] **Step 5: Capture the recommended feature count**
 

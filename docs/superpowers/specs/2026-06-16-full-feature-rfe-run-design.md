@@ -112,7 +112,12 @@ trusting any result confirm:
 
 - Clean, nonzero-error exit code from each nbconvert run.
 - XGBoost echoes `len(candidate_features) ≈ 2348` (proves `RANK_ONLY = False` took
-  effect — a stale `True` would silently produce the 91-feature run again).
+  effect — a stale `True` would silently produce the ~1,529-feature rank-only run
+  again). Note: rank-only keeps **1,529** features with the current list (all `_rank` /
+  `_rank_change` + non-cumulative columns), not the ~91 cited in earlier notes — that 91
+  is BART's `START_POOL_SIZE` row in the RFE trace, a different thing. The full set adds
+  back the ~820 cumulative value/sum/delta columns, so the experiment is precisely
+  "1,529 rank columns vs 2,349 rank+aggregated columns.")
 - BART echoes its ~90-feature start (`START run: N starting features`).
 
 ## Success criteria
