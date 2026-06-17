@@ -14,13 +14,15 @@
 
 - Repo root: `/Users/joshuaharkness/ClaudeProjects/nfl-predictions` (abbreviated **ROOT**). `cd` there first.
 - **Env Python** (abbreviated **EPY**): `/opt/homebrew/Caskroom/miniforge/base/envs/nfl-predictions/bin/python` (the bare `python3` lacks pandas/sklearn/pytest). There is **no pytest** — tests are `unittest`.
-- **Run a single test file:**
+- **Run a single test file** (the `tests/` tree has no `__init__.py`, so `discover -p`
+  finds 0 tests — use the dotted module path instead):
   ```bash
   cd /Users/joshuaharkness/ClaudeProjects/nfl-predictions
   PYTHONPATH=. /opt/homebrew/Caskroom/miniforge/base/envs/nfl-predictions/bin/python \
-    -m unittest discover -s tests -p "<test_file>.py" -v
+    -m unittest tests.data_science_utilities.<test_file_without_.py> -v
   ```
   (`-m unittest` puts ROOT on `sys.path` so `import data_science_utilities` resolves.)
+  Full suite: `... -m unittest discover -s tests -v` (discover works for a full run).
 - **Notebook cells** are edited with **NotebookEdit** (`cell_id` = the `id` from a Read of the notebook). Read the notebook before editing.
 - **Headless notebook runs** (the canonical form from the Run-15 plan):
   ```bash
@@ -312,7 +314,7 @@ class TestBartOneSE(unittest.TestCase):
 ```bash
 cd /Users/joshuaharkness/ClaudeProjects/nfl-predictions
 PYTHONPATH=. /opt/homebrew/Caskroom/miniforge/base/envs/nfl-predictions/bin/python \
-  -m unittest discover -s tests -p "test_bart_backward_elimination.py" -v
+  -m unittest tests.data_science_utilities.test_bart_backward_elimination -v
 ```
 Expected: `AttributeError: 'BartBackwardElimination' object has no attribute 'get_best_features_1se'`.
 
