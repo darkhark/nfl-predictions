@@ -171,6 +171,8 @@ metrics are tracked:
 | 12 | 2026-06-12 | **BART** on the run-11 Phase 3 feature set | 51 | 0.699 | 0.651 | 0.2207 |
 | 13 | 2026-06-12 | Extended RFE (30 iter, curve collapses at ~15), tolerance rule picks 17, XGBoost | 17 | 0.688 | 0.632 | 0.2231 |
 | 14 | 2026-06-13 | **BART backward-elimination** on BART's own `variable_inclusion` (peak at 32), BART | 32 | 0.705 | 0.658 | 0.2190 |
+| 15 | 2026-06-16 | **Full set (rank + aggregated)** — `RANK_ONLY=False`, ~2,349-col pool, XGBoost | 31 | 0.698 | 0.639 | 0.2204 |
+| 16 | 2026-06-16 | **BART** on the full-set pool (148-feature pre-filter; validation peak 119) | 119 | 0.699 | 0.645 | 0.2213 |
 
 **What changed between runs**
 
@@ -343,6 +345,30 @@ metrics are tracked:
   matters for BART; and we are firmly on a ~0.705–0.708 / ~0.219 Brier plateau that five
   feature generations and two estimators have not broken — the ceiling now looks like a
   data/regime limit, not a feature-engineering one.
+- **Run 14 → 15/16 (full ranked + aggregated set):** tested whether adding the aggregated
+  cumulative-average / sum / delta columns *back* alongside the ranks helps — `RANK_ONLY =
+  False`, a **~2,349-column pool vs rank-only's 1,529** (the extra ~820 are the continuous
+  aggregated *values* the rank-only experiment had dropped as collinear with their ranks).
+  XGBoost RFE on the full pool selected **31 features (CV peak), hold-out 0.698**; BART
+  backward-elimination on a generous 148-feature pre-filter peaked at **119 features,
+  hold-out 0.699** (a cheaper 49-feature pre-filter gave 0.698 at 40 features — consistent).
+  **All three cluster at 0.698–0.699, ~0.006–0.008 below the rank-only champions** (XGBoost
+  run 11 0.707, BART run 14 0.705) — no lift. What *did* change is composition: with the
+  aggregated columns available the two estimators disagree sharply (BART's 40-feature set
+  overlaps XGBoost's 31 by only 25, **Jaccard 0.54**), and **10 of BART's 15 unique picks
+  are uncorrelated (<0.5) to anything XGBoost chose** — genuinely different signal, not
+  correlated substitutes — yet hold-out is identical. This is the strongest form of the
+  long-running crowding-out result: the aggregated values carry **no incremental hold-out
+  signal beyond their ranks**, for either estimator, so rank-only stays the default.
+  > Process notes: the null isn't a pre-filter artifact — BART's validation peak sat at 119
+  > of its 148-feature pool (it keeps most of what it's given) and the 49→148 pool change
+  > moved hold-out only +0.001. Also, an 86-feature BART attempt looked "intractable" only
+  > because the laptop slept on battery; on AC each BART fit is ~3 min regardless of 49 vs
+  > 148 features (BART cost here is dominated by MCMC sampling, not the split search).
+  > Reproduce: `RANK_ONLY = False` in `cross_validation/rfe.ipynb` (writes
+  > `rfe_features_kfolds_full.csv`); `cross_validation/grid_search.ipynb` with
+  > `SELECTED_RFE_CSV = 'rfe_features_kfolds_full.csv'`, `BEST_NUM_FEATS = 31`;
+  > `cross_validation/bart_rfe.ipynb` with `START_POOL_SIZE = 148`.
 
 ## Roadmap
 
