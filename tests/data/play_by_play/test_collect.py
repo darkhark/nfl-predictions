@@ -398,8 +398,9 @@ class TestGetPlayByPlayFeatures(unittest.TestCase):
         features = self._features()
         feature_cols = [col for col in features.columns
                         if col.startswith('off_') or col.startswith('def_opp_')]
-        # 50 metrics (10 aggregate + 26 directional + 9 phase-3 play + 4 penalty + 1 pace) x 3 x 2 x 3
-        self.assertEqual(len(feature_cols), 900)
+        # 74 metrics (10 aggregate + 26 directional + 9 phase-3 play + 4 penalty + 1 pace
+        # + 24 situational) x 3 contexts x 2 sides x 3 (avg/rank/rank_change) = 1332
+        self.assertEqual(len(feature_cols), 1332)
         self.assertEqual(list(features.columns[:3]), ['team', 'season', 'week'])
 
     def test_offense_rank_one_is_best_epa(self):
@@ -452,7 +453,8 @@ class TestDirectionalConstants(unittest.TestCase):
     def test_directional_lists_wired_into_aggregates(self):
         # 56 directional+aggregate + 12 phase-3 play + 4 penalty + 2 pace + 40 situational = 114
         self.assertEqual(len(collect.COMPONENT_COLUMNS), 114)
-        self.assertEqual(len(collect.RATE_METRICS), 50)
+        # RATE_METRICS 36 + 9 + 4 + 1 = 50, + 24 situational = 74
+        self.assertEqual(len(collect.RATE_METRICS), 74)
         for bucket in collect.DIRECTIONAL_BUCKETS:
             self.assertIn(f'{bucket}_attempt_count', collect.PLAY_COMPONENT_COLUMNS)
 
@@ -797,6 +799,41 @@ class TestSituationalComponents(unittest.TestCase):
         for b in collect.SITUATIONAL_BUCKETS:
             self.assertEqual(self._val(f'{b}_play_count'),
                              self._val(f'{b}_pass_count') + self._val(f'{b}_run_count'))
+
+
+class TestSituationalRates(unittest.TestCase):
+
+    def test_situational_rate_columns_exist_off_and_def(self):
+        # one team-week of competitive plays so cumulative rates are well-defined
+        components = collect._aggregate_season(pd.DataFrame([
+            make_play(play_id=1, is_pass=1, down=3, ydstogo=1, third_down_converted=1.0, success=1.0, epa=0.4, wp=0.5),
+            make_play(play_id=2, is_rush=1, down=3, ydstogo=1, third_down_converted=0.0, success=0.0, epa=-0.2, wp=0.5),
+            make_play(play_id=3, is_pass=1, down=2, ydstogo=9, success=1.0, epa=0.5, wp=0.5),
+        ]))
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        df = collect._add_cumulative_rate_columns(components)
+        # tendency + play-type-split execution, offense and defense, competitive context
+        for col in [
+            'off_down3_short_pass_rate_competitive_cumulative_average',
+            'off_down3_short_conversion_rate_pass_competitive_cumulative_average',
+            'off_down3_short_conversion_rate_run_competitive_cumulative_average',
+            'off_down2_long_success_rate_pass_competitive_cumulative_average',
+            'def_opp_down3_short_pass_rate_competitive_cumulative_average',
+        ]:
+            self.assertIn(col, df.columns)
+
+    def test_situational_rate_values(self):
+        components = collect._aggregate_season(pd.DataFrame([
+            make_play(play_id=1, is_pass=1, down=3, ydstogo=1, third_down_converted=1.0, success=1.0, epa=0.4, wp=0.5),
+            make_play(play_id=2, is_rush=1, down=3, ydstogo=1, third_down_converted=0.0, success=0.0, epa=-0.2, wp=0.5),
+        ]))
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        df = collect._add_cumulative_rate_columns(components)
+        row = df.iloc[0]
+        # 3rd-and-short: 1 pass of 2 plays -> pass_rate 0.5; the pass converted -> 1.0
+        self.assertAlmostEqual(row['off_down3_short_pass_rate_competitive_cumulative_average'], 0.5)
+        self.assertAlmostEqual(row['off_down3_short_conversion_rate_pass_competitive_cumulative_average'], 1.0)
+        self.assertAlmostEqual(row['off_down3_short_conversion_rate_run_competitive_cumulative_average'], 0.0)
 
 
 if __name__ == '__main__':
