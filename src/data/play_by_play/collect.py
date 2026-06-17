@@ -539,6 +539,18 @@ def _add_cumulative_rate_columns(df):
         [OPPONENT_TEAM_COL, SEASON_COL]
     )[component_cols].cumsum()
 
+    # Recency component frames, parallel to the cumsum frames (same grouping + ordering).
+    # EWMA averages each component (halflife 3); rolling sums the last 4 games. Recency
+    # rates below are ratios of these recency-weighted numerator/denominator components.
+    off_ewm = df.groupby([TEAM_COL, SEASON_COL])[component_cols].transform(
+        lambda s: s.ewm(halflife=3, adjust=True).mean())
+    off_roll = df.groupby([TEAM_COL, SEASON_COL])[component_cols].transform(
+        lambda s: s.rolling(4, min_periods=1).sum())
+    def_ewm = opp_ordered.groupby([OPPONENT_TEAM_COL, SEASON_COL])[component_cols].transform(
+        lambda s: s.ewm(halflife=3, adjust=True).mean())
+    def_roll = opp_ordered.groupby([OPPONENT_TEAM_COL, SEASON_COL])[component_cols].transform(
+        lambda s: s.rolling(4, min_periods=1).sum())
+
     rate_columns = {}
     for metric, numerator, denominator in RATE_METRICS:
         for context in WP_CONTEXTS:
@@ -555,6 +567,17 @@ def _add_cumulative_rate_columns(df):
                 defense_numerator / defense_denominator.where(defense_denominator != 0)
             )
 
+            # EWMA recency (ratio of EWMA-weighted components; shared weights cancel)
+            off_n = off_ewm[f'{numerator}_{context}']; off_d = off_ewm[f'{denominator}_{context}']
+            rate_columns[f'off_{metric}_{context}_ewma_average'] = off_n / off_d.where(off_d != 0)
+            def_n = def_ewm[f'{numerator}_{context}']; def_d = def_ewm[f'{denominator}_{context}']
+            rate_columns[f'def_opp_{metric}_{defense_context}_ewma_average'] = def_n / def_d.where(def_d != 0)
+            # Rolling recency (ratio of last-4 component sums = last-4-game rate)
+            off_n = off_roll[f'{numerator}_{context}']; off_d = off_roll[f'{denominator}_{context}']
+            rate_columns[f'off_{metric}_{context}_rolling_average'] = off_n / off_d.where(off_d != 0)
+            def_n = def_roll[f'{numerator}_{context}']; def_d = def_roll[f'{denominator}_{context}']
+            rate_columns[f'def_opp_{metric}_{defense_context}_rolling_average'] = def_n / def_d.where(def_d != 0)
+
     # wp-context snap-share: a CROSS-context ratio (each context's play_count over the
     # season-to-date total across all contexts), so it cannot be a within-context
     # RATE_METRICS entry. Named *_cumulative_average so it is auto-ranked like the rest.
@@ -568,6 +591,20 @@ def _add_cumulative_rate_columns(df):
         rate_columns[f'def_opp_snap_share_{defense_context}_cumulative_average'] = (
             def_cumulative[f'play_count_{context}'] / def_total_plays.where(def_total_plays != 0)
         )
+
+    # Recency snap-share: same cross-context play_count ratio over the recency-weighted
+    # per-context totals (ewma-averaged / last-4-summed), offense and defense (swapped).
+    for frame, tag in ((off_ewm, 'ewma'), (off_roll, 'rolling')):
+        total = sum(frame[f'play_count_{c}'] for c in WP_CONTEXTS)
+        for context in WP_CONTEXTS:
+            rate_columns[f'off_snap_share_{context}_{tag}_average'] = (
+                frame[f'play_count_{context}'] / total.where(total != 0))
+    for frame, tag in ((def_ewm, 'ewma'), (def_roll, 'rolling')):
+        total = sum(frame[f'play_count_{c}'] for c in WP_CONTEXTS)
+        for context in WP_CONTEXTS:
+            defense_context = DEFENSE_CONTEXT_SWAP[context]
+            rate_columns[f'def_opp_snap_share_{defense_context}_{tag}_average'] = (
+                frame[f'play_count_{context}'] / total.where(total != 0))
 
     return pd.concat([df, pd.DataFrame(rate_columns)], axis=1)
 
@@ -588,10 +625,11 @@ def get_play_by_play_features(years, refresh=False):
     components = _add_game_count_columns(components).reset_index(drop=True)
     df = _add_cumulative_rate_columns(components)
 
+    _avg_suffixes = ('_cumulative_average', '_ewma_average', '_rolling_average')
     off_cols = [col for col in df.columns
-                if col.startswith('off_') and col.endswith('_cumulative_average')]
+                if col.startswith('off_') and col.endswith(_avg_suffixes)]
     def_cols = [col for col in df.columns
-                if col.startswith('def_opp_') and col.endswith('_cumulative_average')]
+                if col.startswith('def_opp_') and col.endswith(_avg_suffixes)]
     df = transformations.add_rank_and_rank_change_columns(df, off_cols, def_cols)
 
     feature_cols = [col for col in df.columns
