@@ -1,5 +1,5 @@
 from sklearn.metrics import (
-    roc_auc_score, log_loss, f1_score, precision_score,
+    roc_auc_score, log_loss, brier_score_loss, f1_score, precision_score,
     recall_score, accuracy_score
 )
 from xgboost import XGBClassifier
@@ -25,6 +25,7 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
         self.test_preds = {}
         self.all_models = {}
         self.all_model_scores = []
+        self.all_model_score_folds = []
         self.importances = None
 
     def get_optimal_features_no_grouped_records(self, drop_rate=.1, max_iter=10, verbose=0, base_margin=None,
@@ -71,6 +72,7 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
                     self.all_models[len(train_features)] = {fold: model}
                     self.test_preds[len(train_features)] = {fold: test_preds}
             self.all_model_scores.append(np.mean(model_scores))
+            self.all_model_score_folds.append(list(model_scores))
             if on_iteration is not None:
                 on_iteration({
                     'iteration': i + 1,
@@ -117,6 +119,28 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
                     past_scores, curr_score, curr_num_feats, min_diff
                 )
         return best_num_feats
+
+    def get_best_num_features_1se(self):
+        """Most parsimonious feature count within one standard error of the best CV
+        score. SE is the standard error across folds at the best-scoring count.
+        Direction-aware via HIGHER_IS_BETTER_METRICS, so it works for any metric
+        (roc_auc, brier, log_loss, ...). Replaces the smallest-within-tolerance rule,
+        which over-shrinks on flat curves (run-13 lesson)."""
+        sizes = list(self.all_features.keys())
+        means = list(self.all_model_scores)
+        folds = list(self.all_model_score_folds)
+        higher_is_better = self.model_score_metric in self.HIGHER_IS_BETTER_METRICS
+        best_i = (max if higher_is_better else min)(
+            range(len(means)), key=lambda i: means[i]
+        )
+        best_folds = folds[best_i]
+        se = (float(np.std(best_folds, ddof=1) / np.sqrt(len(best_folds)))
+              if len(best_folds) > 1 else 0.0)
+        if higher_is_better:
+            within = [sizes[i] for i in range(len(means)) if means[i] >= means[best_i] - se]
+        else:
+            within = [sizes[i] for i in range(len(means)) if means[i] <= means[best_i] + se]
+        return min(within)
 
     def _is_curr_score_better(self, curr_score, best_score, min_diff):
         if self.model_score_metric in self.HIGHER_IS_BETTER_METRICS:
@@ -187,6 +211,8 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
             score = roc_auc_score(y_test, preds)
         elif self.model_score_metric == 'log_loss':
             score = log_loss(y_test, preds)
+        elif self.model_score_metric == 'brier':
+            score = brier_score_loss(y_test, preds)
         elif self.model_score_metric == 'f1':
             score = f1_score(y_test, preds.round())
         elif self.model_score_metric == 'precision':
@@ -196,7 +222,7 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
         elif self.model_score_metric == 'accuracy':
             score = accuracy_score(y_test, preds.round())
         else:
-            raise ValueError('model_score_metric must be one of roc_auc, log_loss, f1, precision, recall, accuracy')
+            raise ValueError('model_score_metric must be one of roc_auc, log_loss, brier, f1, precision, recall, accuracy')
         return score
 
     def _get_non_zero_importances(self, model):

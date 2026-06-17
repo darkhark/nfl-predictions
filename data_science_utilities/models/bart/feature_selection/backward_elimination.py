@@ -1,6 +1,7 @@
 import math
 from concurrent.futures import ThreadPoolExecutor
 
+import numpy as np
 import pandas as pd
 
 
@@ -25,6 +26,8 @@ class BartBackwardElimination:
     Selection follows the validation-curve PEAK, not smallest-within-tolerance: on flat
     curves the tolerance rule over-shrinks, and small sets carry hold-out variance the
     validation score does not price (see the run-13 experiment-log entry).
+    `get_best_features_1se()` offers a direction-aware 1-SE variant; see its docstring
+    for the sampler-noise caveat.
     """
 
     def __init__(self, fit_fn, drop_rate=0.2, min_features=10, replicates=2,
@@ -79,6 +82,28 @@ class BartBackwardElimination:
         if self.history is None:
             raise RuntimeError('call run() before get_best_features()')
         best_row = self.history.loc[self.history['validation_score'].idxmax()]
+        return list(best_row['features'])
+
+    def get_best_features_1se(self, higher_is_better=False):
+        """Most parsimonious feature set within one standard error of the best
+        validation score. SE is the standard error across replicate scores at the
+        best-scoring set. Pass higher_is_better=False for lower-is-better metrics
+        (e.g. Brier), True for higher-is-better (e.g. ROC-AUC).
+
+        Caveat: BART's RFE has no cross-validation -- the replicates are sampler-seed
+        reruns on a fixed validation slice, so this SE captures SAMPLER noise (~0.003),
+        not data/generalization variance. The band is therefore tight (near-peak)."""
+        if self.history is None:
+            raise RuntimeError('call run() before get_best_features_1se()')
+        means = self.history['validation_score'].to_numpy()
+        best_i = int(np.argmax(means) if higher_is_better else np.argmin(means))
+        reps = list(self.history.iloc[best_i]['replicate_scores'])
+        se = (float(np.std(reps, ddof=1) / np.sqrt(len(reps))) if len(reps) > 1 else 0.0)
+        if higher_is_better:
+            within = self.history[self.history['validation_score'] >= means[best_i] - se]
+        else:
+            within = self.history[self.history['validation_score'] <= means[best_i] + se]
+        best_row = within.loc[within['num_features'].idxmin()]
         return list(best_row['features'])
 
     def _evaluate(self, features, iteration):

@@ -69,5 +69,79 @@ class TestMinFeaturesFloor(unittest.TestCase):
         self.assertIn('num_features', seen[0])
 
 
+class TestBrierMetric(unittest.TestCase):
+
+    def test_brier_metric_runs_and_scores_are_probabilities(self):
+        X, y = make_synthetic_frame()
+        rfe = ClassifierCrossValidationRecursiveFeatureSelection(
+            X, y, dict(FAST_XGB_PARAMS), model_score_metric='brier'
+        )
+        rfe.get_optimal_features_no_grouped_records(drop_rate=0.3, max_iter=3, n_folds=3)
+        self.assertTrue(all(0.0 <= s <= 1.0 for s in rfe.all_model_scores))
+        self.assertEqual(len(rfe.all_model_scores), 3)
+
+    def test_brier_is_treated_as_lower_is_better(self):
+        rfe = ClassifierCrossValidationRecursiveFeatureSelection(
+            *make_synthetic_frame(), dict(FAST_XGB_PARAMS), model_score_metric='brier'
+        )
+        self.assertNotIn('brier', rfe.HIGHER_IS_BETTER_METRICS)
+
+
+class TestPerFoldStorage(unittest.TestCase):
+
+    def test_per_fold_scores_stored_and_consistent_with_means(self):
+        X, y = make_synthetic_frame()
+        rfe = ClassifierCrossValidationRecursiveFeatureSelection(X, y, dict(FAST_XGB_PARAMS))
+        rfe.get_optimal_features_no_grouped_records(drop_rate=0.3, max_iter=3, n_folds=3)
+        self.assertEqual(len(rfe.all_model_score_folds), len(rfe.all_model_scores))
+        for folds, mean in zip(rfe.all_model_score_folds, rfe.all_model_scores):
+            self.assertEqual(len(folds), 3)
+            self.assertAlmostEqual(sum(folds) / len(folds), mean)
+
+
+class TestOneSESelection(unittest.TestCase):
+
+    def _rfe(self, metric):
+        X, y = make_synthetic_frame()
+        return ClassifierCrossValidationRecursiveFeatureSelection(
+            X, y, dict(FAST_XGB_PARAMS), model_score_metric=metric
+        )
+
+    def test_lower_is_better_picks_parsimonious_within_band(self):
+        rfe = self._rfe('brier')
+        rfe.all_features = {10: ['f'] * 10, 7: ['f'] * 7, 5: ['f'] * 5, 3: ['f'] * 3}
+        rfe.all_model_scores = [0.200, 0.180, 0.181, 0.230]
+        rfe.all_model_score_folds = [
+            [0.200, 0.200, 0.200],
+            [0.178, 0.180, 0.182],
+            [0.181, 0.181, 0.181],
+            [0.230, 0.230, 0.230],
+        ]
+        self.assertEqual(rfe.get_best_num_features_1se(), 5)
+
+    def test_tight_band_returns_the_optimum(self):
+        rfe = self._rfe('brier')
+        rfe.all_features = {10: ['f'] * 10, 7: ['f'] * 7, 5: ['f'] * 5}
+        rfe.all_model_scores = [0.200, 0.180, 0.190]
+        rfe.all_model_score_folds = [
+            [0.200, 0.200, 0.200],
+            [0.180, 0.180, 0.180],
+            [0.190, 0.190, 0.190],
+        ]
+        self.assertEqual(rfe.get_best_num_features_1se(), 7)
+
+    def test_higher_is_better_direction(self):
+        rfe = self._rfe('roc_auc')
+        rfe.all_features = {10: ['f'] * 10, 7: ['f'] * 7, 5: ['f'] * 5, 3: ['f'] * 3}
+        rfe.all_model_scores = [0.690, 0.710, 0.709, 0.660]
+        rfe.all_model_score_folds = [
+            [0.690, 0.690, 0.690],
+            [0.708, 0.710, 0.712],
+            [0.709, 0.709, 0.709],
+            [0.660, 0.660, 0.660],
+        ]
+        self.assertEqual(rfe.get_best_num_features_1se(), 5)
+
+
 if __name__ == '__main__':
     unittest.main()

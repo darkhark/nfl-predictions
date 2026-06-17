@@ -171,6 +171,12 @@ metrics are tracked:
 | 12 | 2026-06-12 | **BART** on the run-11 Phase 3 feature set | 51 | 0.699 | 0.651 | 0.2207 |
 | 13 | 2026-06-12 | Extended RFE (30 iter, curve collapses at ~15), tolerance rule picks 17, XGBoost | 17 | 0.688 | 0.632 | 0.2231 |
 | 14 | 2026-06-13 | **BART backward-elimination** on BART's own `variable_inclusion` (peak at 32), BART | 32 | 0.705 | 0.658 | 0.2190 |
+| 15 | 2026-06-16 | **Full set (rank + aggregated)** — `RANK_ONLY=False`, ~2,349-col pool, XGBoost | 31 | 0.698 | 0.639 | 0.2204 |
+| 16 | 2026-06-16 | **BART** on the full-set pool (148-feature pre-filter; validation peak 119) | 119 | 0.699 | 0.645 | 0.2213 |
+| 17 | 2026-06-17 | **Brier + 1-SE selection** (vs AUROC + 0.005 tol), rank-only, XGBoost | 25 | 0.700 | 0.645 | 0.2200 |
+| 18 | 2026-06-17 | **Brier + 1-SE selection**, full set, XGBoost | 55 | 0.698 | 0.649 | 0.2205 |
+| 19 | 2026-06-17 | **Brier + 1-SE selection**, rank-only, BART | 26 | 0.703 | 0.646 | **0.2192** |
+| 20 | 2026-06-17 | **Brier + 1-SE selection**, full set, BART | 62 | 0.697 | 0.642 | 0.2207 |
 
 **What changed between runs**
 
@@ -343,6 +349,52 @@ metrics are tracked:
   matters for BART; and we are firmly on a ~0.705–0.708 / ~0.219 Brier plateau that five
   feature generations and two estimators have not broken — the ceiling now looks like a
   data/regime limit, not a feature-engineering one.
+- **Run 14 → 15/16 (full ranked + aggregated set):** tested whether adding the aggregated
+  cumulative-average / sum / delta columns *back* alongside the ranks helps — `RANK_ONLY =
+  False`, a **~2,349-column pool vs rank-only's 1,529** (the extra ~820 are the continuous
+  aggregated *values* the rank-only experiment had dropped as collinear with their ranks).
+  XGBoost RFE on the full pool selected **31 features (CV peak), hold-out 0.698**; BART
+  backward-elimination on a generous 148-feature pre-filter peaked at **119 features,
+  hold-out 0.699** (a cheaper 49-feature pre-filter gave 0.698 at 40 features — consistent).
+  **All three cluster at 0.698–0.699, ~0.006–0.008 below the rank-only champions** (XGBoost
+  run 11 0.707, BART run 14 0.705) — no lift. What *did* change is composition: with the
+  aggregated columns available the two estimators disagree sharply (BART's 40-feature set
+  overlaps XGBoost's 31 by only 25, **Jaccard 0.54**), and **10 of BART's 15 unique picks
+  are uncorrelated (<0.5) to anything XGBoost chose** — genuinely different signal, not
+  correlated substitutes — yet hold-out is identical. This is the strongest form of the
+  long-running crowding-out result: the aggregated values carry **no incremental hold-out
+  signal beyond their ranks**, for either estimator, so rank-only stays the default.
+  > Process notes: the null isn't a pre-filter artifact — BART's validation peak sat at 119
+  > of its 148-feature pool (it keeps most of what it's given) and the 49→148 pool change
+  > moved hold-out only +0.001. Also, an 86-feature BART attempt looked "intractable" only
+  > because the laptop slept on battery; on AC each BART fit is ~3 min regardless of 49 vs
+  > 148 features (BART cost here is dominated by MCMC sampling, not the split search).
+  > Reproduce: `RANK_ONLY = False` in `cross_validation/rfe.ipynb` (writes
+  > `rfe_features_kfolds_full.csv`); `cross_validation/grid_search.ipynb` with
+  > `SELECTED_RFE_CSV = 'rfe_features_kfolds_full.csv'`, `BEST_NUM_FEATS = 31`;
+  > `cross_validation/bart_rfe.ipynb` with `START_POOL_SIZE = 148`.
+- **Runs 17–20 (Brier + 1-SE selection):** switched the selection objective from ROC-AUC
+  (a pure *ranking* metric, blind to calibration) to **Brier** (a proper scoring rule that
+  rewards calibration + sharpness), and replaced XGBoost's smallest-within-0.005-tolerance
+  rule and BART's pure-peak with a shared, direction-aware **1-SE rule** (most parsimonious
+  set within one standard error of the best). The metric is now a single configurable
+  `SELECTION_METRIC` knob in all three notebooks (`'brier'` default; `'roc_auc'` /
+  `'log_loss'` switchable), and the XGBoost RFE class gained a `brier` metric + per-fold
+  storage + `get_best_num_features_1se()`, BART a `get_best_features_1se()` (all unit-tested).
+  Result: **the plateau is metric-robust.** All four runs land at ~0.697–0.703 ROC-AUC /
+  0.2192–0.2207 Brier — statistically indistinguishable from the AUROC-selected models, just
+  often more parsimonious (BART rank-only: 26 features vs run-14's 32). The best Brier of the
+  four, **run 19 (BART rank-only, 0.2192)**, ties the AUROC-selected run-14 BART (0.2190) and
+  does not reach run-10's 0.2185 — i.e. selecting *for* calibration did not buy measurably
+  better calibration. The full-set runs (18, 20) again trail their rank-only counterparts on
+  Brier (0.2205 / 0.2207), consistent with the run-15/16 null on aggregated features.
+  > BART-SE caveat: BART's RFE has no cross-validation, so its 1-SE band uses the spread of
+  > the 6 sampler-seed replicates — that captures sampler noise (~0.003), not generalization
+  > variance, making the band tight (near-peak). The validation Brier curve is also extremely
+  > flat (run 19: 0.2297–0.2319 across 91→10 features), so the *count* is only loosely
+  > determined; what RFE mainly fixes here is the feature *composition* (via the inclusion
+  > ranking), not a sharp elbow. Reproduce: set `SELECTION_METRIC = 'brier'` in the three
+  > `cross_validation/` notebooks; artifacts are suffixed `_brier`.
 
 ## Roadmap
 
