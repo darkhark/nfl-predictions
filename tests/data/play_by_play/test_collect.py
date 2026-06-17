@@ -450,8 +450,8 @@ class TestDirectionalConstants(unittest.TestCase):
             self.assertIn(column, collect.REQUIRED_PBP_COLUMNS)
 
     def test_directional_lists_wired_into_aggregates(self):
-        # 56 directional+aggregate + 12 phase-3 play + 4 penalty + 2 pace = 74; RATE_METRICS 36 + 9 + 4 + 1 = 50
-        self.assertEqual(len(collect.COMPONENT_COLUMNS), 74)
+        # 56 directional+aggregate + 12 phase-3 play + 4 penalty + 2 pace + 40 situational = 114
+        self.assertEqual(len(collect.COMPONENT_COLUMNS), 114)
         self.assertEqual(len(collect.RATE_METRICS), 50)
         for bucket in collect.DIRECTIONAL_BUCKETS:
             self.assertIn(f'{bucket}_attempt_count', collect.PLAY_COMPONENT_COLUMNS)
@@ -761,6 +761,42 @@ class TestAssignSituationalBucket(unittest.TestCase):
         # same as the existing _assign_run_bucket "no bucket" sentinel; assert null-ness
         # rather than literal None so the test matches the established codebase behavior.
         self.assertTrue(pd.isna(self._bucket(down=4, ydstogo=1)))
+
+
+class TestSituationalComponents(unittest.TestCase):
+
+    def setUp(self):
+        # all competitive (wp=0.5). 3rd-and-short: one converted pass, one stuffed run.
+        # 2nd-and-long: one successful pass. 1st down: one failed run.
+        self.agg = collect._aggregate_play_components(pd.DataFrame([
+            make_play(play_id=1, is_pass=1, down=3, ydstogo=1, third_down_converted=1.0, success=1.0, epa=0.4),
+            make_play(play_id=2, is_rush=1, down=3, ydstogo=1, third_down_converted=0.0, success=0.0, epa=-0.3),
+            make_play(play_id=3, is_pass=1, down=2, ydstogo=9, success=1.0, epa=0.5),
+            make_play(play_id=4, is_rush=1, down=1, ydstogo=10, success=0.0, epa=-0.1),
+        ]))
+
+    def _val(self, col):
+        return self.agg.loc[self.agg[collect.CONTEXT_COL] == collect.COMPETITIVE, col].iloc[0]
+
+    def test_bucket_play_pass_run_counts(self):
+        self.assertEqual(self._val('down3_short_play_count'), 2)
+        self.assertEqual(self._val('down3_short_pass_count'), 1)
+        self.assertEqual(self._val('down3_short_run_count'), 1)
+        self.assertEqual(self._val('down1_play_count'), 1)
+        self.assertEqual(self._val('down2_long_pass_count'), 1)
+
+    def test_down3_conversion_components_split_by_play_type(self):
+        self.assertEqual(self._val('down3_short_pass_conversion_sum'), 1)  # the converted pass
+        self.assertEqual(self._val('down3_short_run_conversion_sum'), 0)   # stuffed run
+
+    def test_non_down3_uses_success_components(self):
+        self.assertEqual(self._val('down2_long_pass_success_sum'), 1)
+        self.assertEqual(self._val('down1_run_success_sum'), 0)
+
+    def test_play_count_equals_pass_plus_run(self):
+        for b in collect.SITUATIONAL_BUCKETS:
+            self.assertEqual(self._val(f'{b}_play_count'),
+                             self._val(f'{b}_pass_count') + self._val(f'{b}_run_count'))
 
 
 if __name__ == '__main__':

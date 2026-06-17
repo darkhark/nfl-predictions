@@ -177,7 +177,7 @@ PLAY_COMPONENT_COLUMNS = [
     'early_down_count', 'early_down_success_sum',
     'third_down_count', 'third_down_conversion_sum',
     'xpass_play_count', 'pass_minus_xpass_sum',
-] + DIRECTIONAL_COMPONENT_COLUMNS + PHASE3_PLAY_COMPONENT_COLUMNS
+] + DIRECTIONAL_COMPONENT_COLUMNS + PHASE3_PLAY_COMPONENT_COLUMNS + SITUATIONAL_COMPONENT_COLUMNS
 DRIVE_COMPONENT_COLUMNS = [
     'red_zone_drive_count', 'red_zone_td_drive_count',
     'pace_seconds_sum', 'pace_play_count',
@@ -309,6 +309,23 @@ def _aggregate_play_components(pbp_df):
         plays[f'{bucket}_attempt_count'] = in_bucket
         plays[f'{bucket}_yards_sum'] = yards * in_bucket
         plays[f'{bucket}_explosive_count'] = is_explosive.astype(int) * in_bucket
+
+    situational_bucket = _assign_situational_bucket(plays)
+    is_pass = plays['pass'] == 1
+    is_rush = plays['rush'] == 1
+    is_success = plays['success'] == 1
+    converted = plays['third_down_converted'].fillna(0) == 1
+    for bucket in SITUATIONAL_BUCKETS:
+        in_bucket = situational_bucket == bucket
+        plays[f'{bucket}_play_count'] = in_bucket.astype(int)
+        plays[f'{bucket}_pass_count'] = (in_bucket & is_pass).astype(int)
+        plays[f'{bucket}_run_count'] = (in_bucket & is_rush).astype(int)
+        if bucket in _SITUATIONAL_DOWN3:
+            plays[f'{bucket}_pass_conversion_sum'] = (in_bucket & is_pass & converted).astype(int)
+            plays[f'{bucket}_run_conversion_sum'] = (in_bucket & is_rush & converted).astype(int)
+        else:
+            plays[f'{bucket}_pass_success_sum'] = (in_bucket & is_pass & is_success).astype(int)
+            plays[f'{bucket}_run_success_sum'] = (in_bucket & is_rush & is_success).astype(int)
 
     plays['sack_count'] = plays['sack']
     plays['qb_hit_count'] = plays['qb_hit']
