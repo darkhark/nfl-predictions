@@ -116,8 +116,9 @@ def add_rank_columns(df):
     :param df: The concatenated weekly dataframe, after the per-year cumulative columns are built
     :return: The dataframe with *_rank and *_rank_change columns appended
     """
-    off_cols = [col for col in df.columns if col.startswith('off_') and col.endswith('_cumulative_average')]
-    def_cols = [col for col in df.columns if col.startswith('def_opp_') and col.endswith('_cumulative_average')]
+    _avg_suffixes = ('_cumulative_average', '_ewma_average', '_rolling_average')
+    off_cols = [col for col in df.columns if col.startswith('off_') and col.endswith(_avg_suffixes)]
+    def_cols = [col for col in df.columns if col.startswith('def_opp_') and col.endswith(_avg_suffixes)]
     return transformations.add_rank_and_rank_change_columns(df, off_cols, def_cols)
 
 
@@ -146,6 +147,11 @@ def create_cumulative_columns(df, groupby_columns, column_prefix, game_count_col
         new_df.drop(columns=[f'{column_prefix}_{column}_cumulative_sum'], inplace=True)
         new_df[f'{column_prefix}_{column}_cumulative_average_change'] = new_df[f'{column_prefix}_{column}_cumulative_average'].diff()
         new_df.fillna({f'{column_prefix}_{column}_cumulative_average_change': 0}, inplace=True)
+        grp = df.groupby(groupby_columns)[column]
+        new_df[f'{column_prefix}_{column}_ewma_average'] = grp.transform(
+            lambda s: s.ewm(halflife=3, adjust=True).mean())
+        new_df[f'{column_prefix}_{column}_rolling_average'] = grp.transform(
+            lambda s: s.rolling(4, min_periods=1).mean())
         cols_to_drop.append(column)
     if swap_team_and_opponent:
         if TEAM_COL in groupby_columns:

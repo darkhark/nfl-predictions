@@ -127,6 +127,11 @@ def _calculate_cumulative_avg_score(team_df, offense=True):
     team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, f'cumulative_avg_{points}'] = team_df['score']
     team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, f'cumulative_avg_{points}_change'] = 0
 
+    team_df[f'ewma_avg_{points}'] = team_df.groupby(['team', 'season'])['score'].transform(
+        lambda s: s.ewm(halflife=3, adjust=True).mean())
+    team_df[f'rolling_avg_{points}'] = team_df.groupby(['team', 'season'])['score'].transform(
+        lambda s: s.rolling(4, min_periods=1).mean())
+
     team_df = _add_score_rank_columns(team_df, points, offense)
     # 'week' was only needed to rank teams against each other; drop it so the later merge on
     # ['gameday', 'team', 'season'] does not collide with the schedule frame's own 'week' column
@@ -150,6 +155,14 @@ def _add_score_rank_columns(team_df, points, offense):
     team_df = team_df.sort_values(['team', 'season', 'week'])
     team_df[f'{base}_rank_change'] = team_df.groupby(['team', 'season'])[f'{base}_rank'].diff()
     team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, f'{base}_rank_change'] = 0
+
+    for recency_base in (f'ewma_avg_{points}', f'rolling_avg_{points}'):
+        team_df[f'{recency_base}_rank'] = team_df.groupby(['season', 'week'])[recency_base].rank(
+            ascending=(not offense), method='min'
+        )
+        team_df = team_df.sort_values(['team', 'season', 'week'])
+        team_df[f'{recency_base}_rank_change'] = team_df.groupby(['team', 'season'])[f'{recency_base}_rank'].diff()
+        team_df.loc[team_df.groupby(['team', 'season']).cumcount() == 0, f'{recency_base}_rank_change'] = 0
     return team_df
 
 
@@ -171,7 +184,13 @@ def _merge_team_df(df, team_df, team_type, offense=True):
         f'cumulative_avg_{score}': f'{team_type}_{side}_cumulative_avg_{score}',
         f'cumulative_avg_{score}_change': f'{team_type}_{side}_cumulative_avg_{score}_change',
         f'cumulative_avg_{score}_rank': f'{team_type}_{side}_cumulative_avg_{score}_rank',
-        f'cumulative_avg_{score}_rank_change': f'{team_type}_{side}_cumulative_avg_{score}_rank_change'
+        f'cumulative_avg_{score}_rank_change': f'{team_type}_{side}_cumulative_avg_{score}_rank_change',
+        f'ewma_avg_{score}': f'{team_type}_{side}_ewma_avg_{score}',
+        f'ewma_avg_{score}_rank': f'{team_type}_{side}_ewma_avg_{score}_rank',
+        f'ewma_avg_{score}_rank_change': f'{team_type}_{side}_ewma_avg_{score}_rank_change',
+        f'rolling_avg_{score}': f'{team_type}_{side}_rolling_avg_{score}',
+        f'rolling_avg_{score}_rank': f'{team_type}_{side}_rolling_avg_{score}_rank',
+        f'rolling_avg_{score}_rank_change': f'{team_type}_{side}_rolling_avg_{score}_rank_change'
     }
     if not offense:
         # remove the key value pair of days since previous game since it will exist for the offense which is called 1st

@@ -399,9 +399,11 @@ class TestGetPlayByPlayFeatures(unittest.TestCase):
         feature_cols = [col for col in features.columns
                         if col.startswith('off_') or col.startswith('def_opp_')]
         # 74 metrics (10 aggregate + 26 directional + 9 phase-3 play + 4 penalty + 1 pace
-        # + 24 situational) x 3 contexts x 2 sides x 3 (avg/rank/rank_change) = 1332,
-        # + the snap-share family (3 contexts x 2 sides x 3 = 18) = 1350
-        self.assertEqual(len(feature_cols), 1350)
+        # + 24 situational) x 3 contexts x 2 sides x 3 avg-types (cumulative/ewma/rolling)
+        # x 3 (avg/rank/rank_change) = 3996, + the snap-share family (3 contexts x 2 sides
+        # x 3 avg-types x 3 = 54) = 4050. (Recency triples the prior 1350: each averaged
+        # family now also has _ewma_average and _rolling_average + their ranks.)
+        self.assertEqual(len(feature_cols), 4050)
         self.assertEqual(list(features.columns[:3]), ['team', 'season', 'week'])
 
     def test_offense_rank_one_is_best_epa(self):
@@ -869,6 +871,75 @@ class TestSnapShare(unittest.TestCase):
         df = collect._add_cumulative_rate_columns(components)
         row = df.iloc[0]
         self.assertAlmostEqual(row['def_opp_snap_share_garbage_trailing_cumulative_average'], 0.5)
+
+
+class TestPbpRecency(unittest.TestCase):
+
+    def _components(self):
+        # one team, 4 competitive games; play_count and success_sum components only needed
+        import pandas as pd
+        base = {c: 0 for c in collect.COMPONENT_COLUMNS}
+        rows = []
+        for i, (pc, ss) in enumerate([(50, 25), (40, 28), (60, 30), (30, 9)], start=1):
+            r = {**base, 'team': 'AAA', 'opp_team': 'BBB', 'season': 2023, 'week': i,
+                 'season_type': 'REG', 'team_game_count': i, 'opp_game_count': i}
+            r['play_count_competitive'] = pc
+            r['success_sum_competitive'] = ss
+            # zero the other two contexts for these two components
+            r['play_count_garbage_leading'] = 0; r['play_count_garbage_trailing'] = 0
+            r['success_sum_garbage_leading'] = 0; r['success_sum_garbage_trailing'] = 0
+            rows.append(r)
+        df = pd.DataFrame(rows)
+        # ensure every component_context column exists (others all zero)
+        for comp in collect.COMPONENT_COLUMNS:
+            for ctx in collect.WP_CONTEXTS:
+                if f'{comp}_{ctx}' not in df.columns:
+                    df[f'{comp}_{ctx}'] = 0
+        return df
+
+    def test_ewma_and_rolling_success_rate(self):
+        import pandas as pd
+        components = collect._add_game_count_columns(self._components()).reset_index(drop=True)
+        df = collect._add_cumulative_rate_columns(components)
+        num = pd.Series([25.0, 28, 30, 9]); den = pd.Series([50.0, 40, 60, 30])
+        ewma_expected = (num.ewm(halflife=3, adjust=True).mean()
+                         / den.ewm(halflife=3, adjust=True).mean()).to_numpy()
+        roll_expected = (num.rolling(4, min_periods=1).sum()
+                         / den.rolling(4, min_periods=1).sum()).to_numpy()
+        got_ewma = df.sort_values('team_game_count')['off_success_rate_competitive_ewma_average'].to_numpy()
+        got_roll = df.sort_values('team_game_count')['off_success_rate_competitive_rolling_average'].to_numpy()
+        self.assertTrue((abs(got_ewma - ewma_expected) < 1e-9).all())
+        self.assertTrue((abs(got_roll - roll_expected) < 1e-9).all())
+
+
+class TestRecencyRankDiscovery(unittest.TestCase):
+
+    def _synthetic_pbp(self):
+        # Two games in one week: four teams so ranks span 1..4
+        return pd.DataFrame([
+            make_play(posteam='AAA', defteam='BBB', game_id='g1', play_id=1,
+                      is_pass=1, epa=1.0, success=1.0, wp=0.5),
+            make_play(posteam='BBB', defteam='AAA', game_id='g1', play_id=2,
+                      is_rush=1, epa=0.5, success=1.0, wp=0.5),
+            make_play(posteam='CCC', defteam='DDD', game_id='g2', play_id=1,
+                      is_pass=1, epa=-0.5, success=0.0, wp=0.5),
+            make_play(posteam='DDD', defteam='CCC', game_id='g2', play_id=2,
+                      is_rush=1, epa=-1.0, success=0.0, wp=0.5),
+        ])
+
+    def _features(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch.object(collect, 'CACHE_DIR', tmp_dir), \
+                    mock.patch.object(collect.nfl, 'import_pbp_data',
+                                      return_value=self._synthetic_pbp()):
+                return collect.get_play_by_play_features([2023])
+
+    def test_recency_columns_get_ranked(self):
+        features = self._features()
+        self.assertIn(
+            'off_success_rate_competitive_ewma_average_rank', features.columns)
+        self.assertIn(
+            'off_success_rate_competitive_rolling_average_rank', features.columns)
 
 
 if __name__ == '__main__':
