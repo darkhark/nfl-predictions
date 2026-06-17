@@ -35,7 +35,8 @@ CONTEXT_COL = 'wp_context'
 # rows, penalty_yards may be NaN.
 REQUIRED_PBP_COLUMNS = [
     'posteam', 'defteam', 'season', 'week', 'season_type', 'play_id', 'game_id',
-    'pass', 'rush', 'down', 'yardline_100', 'third_down_converted', 'success',
+    'pass', 'rush', 'down', 'ydstogo', 'goal_to_go',
+    'yardline_100', 'third_down_converted', 'success',
     'epa', 'wp', 'xpass', 'fixed_drive', 'fixed_drive_result',
     'yards_gained', 'run_location', 'run_gap', 'pass_location', 'pass_length',
     'sack', 'qb_hit', 'qb_scramble', 'shotgun', 'no_huddle',
@@ -93,6 +94,36 @@ DIRECTIONAL_RATE_METRICS = (
     + [(f'{bucket}_explosive_rate', f'{bucket}_explosive_count', f'{bucket}_attempt_count')
        for bucket in DIRECTIONAL_BUCKETS]
 )
+
+# Situational play-call buckets: down x distance for downs 2/3 (1st down is ~always
+# 1st-and-10, so it is a single bucket; goal_to_go overrides distance; 4th down excluded).
+SITUATIONAL_SHORT_MAX = 2          # short  = ydstogo <= 2
+SITUATIONAL_MEDIUM_MAX = 6         # medium = 3..6 ; long = >= 7
+SITUATIONAL_BUCKETS = [
+    'down1',
+    'down2_short', 'down2_med', 'down2_long',
+    'down3_short', 'down3_med', 'down3_long',
+    'goalToGo',
+]
+_SITUATIONAL_DOWN3 = {'down3_short', 'down3_med', 'down3_long'}
+
+SITUATIONAL_COMPONENT_COLUMNS = []
+for _b in SITUATIONAL_BUCKETS:
+    SITUATIONAL_COMPONENT_COLUMNS += [f'{_b}_play_count', f'{_b}_pass_count', f'{_b}_run_count']
+    if _b in _SITUATIONAL_DOWN3:
+        SITUATIONAL_COMPONENT_COLUMNS += [f'{_b}_pass_conversion_sum', f'{_b}_run_conversion_sum']
+    else:
+        SITUATIONAL_COMPONENT_COLUMNS += [f'{_b}_pass_success_sum', f'{_b}_run_success_sum']
+
+SITUATIONAL_RATE_METRICS = []
+for _b in SITUATIONAL_BUCKETS:
+    SITUATIONAL_RATE_METRICS.append((f'{_b}_pass_rate', f'{_b}_pass_count', f'{_b}_play_count'))
+    if _b in _SITUATIONAL_DOWN3:
+        SITUATIONAL_RATE_METRICS.append((f'{_b}_conversion_rate_pass', f'{_b}_pass_conversion_sum', f'{_b}_pass_count'))
+        SITUATIONAL_RATE_METRICS.append((f'{_b}_conversion_rate_run', f'{_b}_run_conversion_sum', f'{_b}_run_count'))
+    else:
+        SITUATIONAL_RATE_METRICS.append((f'{_b}_success_rate_pass', f'{_b}_pass_success_sum', f'{_b}_pass_count'))
+        SITUATIONAL_RATE_METRICS.append((f'{_b}_success_rate_run', f'{_b}_run_success_sum', f'{_b}_run_count'))
 
 # Phase 3: trenches, turnover luck, and tendency components. Sacks/hits/scrambles are
 # per dropback, stuffs per carry, fumble-recovery luck per fumble; cpoe and
@@ -203,6 +234,26 @@ def _assign_pass_bucket(plays):
     bucket[located] = (
         'pass_' + plays.loc[located, 'pass_length'] + '_' + plays.loc[located, 'pass_location']
     )
+    return bucket
+
+
+def _assign_situational_bucket(plays):
+    """Label each play with its down x distance situational bucket (or None). goal_to_go
+    overrides down/distance; 1st down is a single bucket; 4th down is unlabeled. Distance
+    bins: short <= 2, medium 3..6, long >= 7. Plays outside any bucket still count in the
+    aggregate Phase 1/2/3 metrics."""
+    bucket = pd.Series(None, index=plays.index, dtype='object')
+    goal = plays['goal_to_go'] == 1
+    bucket[goal] = 'goalToGo'
+    rest = ~goal
+    down = plays['down']
+    ytg = plays['ydstogo']
+    bucket[rest & (down == 1)] = 'down1'
+    for d, prefix in ((2, 'down2'), (3, 'down3')):
+        sel = rest & (down == d)
+        bucket[sel & (ytg <= SITUATIONAL_SHORT_MAX)] = f'{prefix}_short'
+        bucket[sel & (ytg > SITUATIONAL_SHORT_MAX) & (ytg <= SITUATIONAL_MEDIUM_MAX)] = f'{prefix}_med'
+        bucket[sel & (ytg > SITUATIONAL_MEDIUM_MAX)] = f'{prefix}_long'
     return bucket
 
 

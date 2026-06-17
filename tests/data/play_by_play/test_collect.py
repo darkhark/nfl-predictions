@@ -9,7 +9,8 @@ from src.data.play_by_play import collect
 
 def make_play(posteam='AAA', defteam='BBB', season=2023, week=1, season_type='REG',
               play_id=1, game_id='2023_01_AAA_BBB', is_pass=0, is_rush=0,
-              down=1, yardline_100=75.0, third_down_converted=0.0, success=0.0,
+              down=1, ydstogo=10, goal_to_go=0,
+              yardline_100=75.0, third_down_converted=0.0, success=0.0,
               epa=0.0, wp=0.5, xpass=None, fixed_drive=1, fixed_drive_result='Punt',
               yards_gained=0.0, run_location=None, run_gap=None,
               pass_location=None, pass_length=None,
@@ -23,7 +24,8 @@ def make_play(posteam='AAA', defteam='BBB', season=2023, week=1, season_type='RE
     return {
         'posteam': posteam, 'defteam': defteam, 'season': season, 'week': week,
         'season_type': season_type, 'play_id': play_id, 'game_id': game_id,
-        'pass': is_pass, 'rush': is_rush, 'down': down, 'yardline_100': yardline_100,
+        'pass': is_pass, 'rush': is_rush, 'down': down,
+        'ydstogo': ydstogo, 'goal_to_go': goal_to_go, 'yardline_100': yardline_100,
         'third_down_converted': third_down_converted, 'success': success, 'epa': epa,
         # float('nan') rather than None so the xpass column is float64 like real
         # nflfastR data, not object dtype
@@ -724,6 +726,41 @@ class TestPaceComponents(unittest.TestCase):
         self.assertEqual(row['red_zone_td_drive_count'], 1)
         self.assertEqual(row['pace_seconds_sum'], 50.0)
         self.assertEqual(row['pace_play_count'], 2)
+
+
+class TestAssignSituationalBucket(unittest.TestCase):
+
+    def _bucket(self, **kw):
+        plays = pd.DataFrame([collect.make_play(**kw)]) if False else None
+        # build directly from kwargs via a one-row frame
+        import pandas as pd
+        row = {'down': kw['down'], 'ydstogo': kw['ydstogo'], 'goal_to_go': kw.get('goal_to_go', 0)}
+        return collect._assign_situational_bucket(pd.DataFrame([row])).iloc[0]
+
+    def test_first_down_single_bucket(self):
+        self.assertEqual(self._bucket(down=1, ydstogo=10), 'down1')
+        self.assertEqual(self._bucket(down=1, ydstogo=4), 'down1')   # 1st-and-short still down1
+
+    def test_goal_to_go_overrides_distance_and_down(self):
+        self.assertEqual(self._bucket(down=1, ydstogo=3, goal_to_go=1), 'goalToGo')
+        self.assertEqual(self._bucket(down=3, ydstogo=1, goal_to_go=1), 'goalToGo')
+
+    def test_down2_distance_bins_and_boundaries(self):
+        self.assertEqual(self._bucket(down=2, ydstogo=2), 'down2_short')   # <=2 short
+        self.assertEqual(self._bucket(down=2, ydstogo=3), 'down2_med')     # 3..6 medium
+        self.assertEqual(self._bucket(down=2, ydstogo=6), 'down2_med')
+        self.assertEqual(self._bucket(down=2, ydstogo=7), 'down2_long')    # >=7 long
+
+    def test_down3_distance_bins(self):
+        self.assertEqual(self._bucket(down=3, ydstogo=1), 'down3_short')
+        self.assertEqual(self._bucket(down=3, ydstogo=5), 'down3_med')
+        self.assertEqual(self._bucket(down=3, ydstogo=12), 'down3_long')
+
+    def test_fourth_down_gets_no_bucket(self):
+        # pd.Series(None, dtype='object') stores NaN (not None) under pandas 2.2.3, the
+        # same as the existing _assign_run_bucket "no bucket" sentinel; assert null-ness
+        # rather than literal None so the test matches the established codebase behavior.
+        self.assertTrue(pd.isna(self._bucket(down=4, ydstogo=1)))
 
 
 if __name__ == '__main__':
