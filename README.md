@@ -173,6 +173,10 @@ metrics are tracked:
 | 14 | 2026-06-13 | **BART backward-elimination** on BART's own `variable_inclusion` (peak at 32), BART | 32 | 0.705 | 0.658 | 0.2190 |
 | 15 | 2026-06-16 | **Full set (rank + aggregated)** — `RANK_ONLY=False`, ~2,349-col pool, XGBoost | 31 | 0.698 | 0.639 | 0.2204 |
 | 16 | 2026-06-16 | **BART** on the full-set pool (148-feature pre-filter; validation peak 119) | 119 | 0.699 | 0.645 | 0.2213 |
+| 17 | 2026-06-17 | **Brier + 1-SE selection** (vs AUROC + 0.005 tol), rank-only, XGBoost | 25 | 0.700 | 0.645 | 0.2200 |
+| 18 | 2026-06-17 | **Brier + 1-SE selection**, full set, XGBoost | 55 | 0.698 | 0.649 | 0.2205 |
+| 19 | 2026-06-17 | **Brier + 1-SE selection**, rank-only, BART | 26 | 0.703 | 0.646 | **0.2192** |
+| 20 | 2026-06-17 | **Brier + 1-SE selection**, full set, BART | 62 | 0.697 | 0.642 | 0.2207 |
 
 **What changed between runs**
 
@@ -369,6 +373,28 @@ metrics are tracked:
   > `rfe_features_kfolds_full.csv`); `cross_validation/grid_search.ipynb` with
   > `SELECTED_RFE_CSV = 'rfe_features_kfolds_full.csv'`, `BEST_NUM_FEATS = 31`;
   > `cross_validation/bart_rfe.ipynb` with `START_POOL_SIZE = 148`.
+- **Runs 17–20 (Brier + 1-SE selection):** switched the selection objective from ROC-AUC
+  (a pure *ranking* metric, blind to calibration) to **Brier** (a proper scoring rule that
+  rewards calibration + sharpness), and replaced XGBoost's smallest-within-0.005-tolerance
+  rule and BART's pure-peak with a shared, direction-aware **1-SE rule** (most parsimonious
+  set within one standard error of the best). The metric is now a single configurable
+  `SELECTION_METRIC` knob in all three notebooks (`'brier'` default; `'roc_auc'` /
+  `'log_loss'` switchable), and the XGBoost RFE class gained a `brier` metric + per-fold
+  storage + `get_best_num_features_1se()`, BART a `get_best_features_1se()` (all unit-tested).
+  Result: **the plateau is metric-robust.** All four runs land at ~0.697–0.703 ROC-AUC /
+  0.2192–0.2207 Brier — statistically indistinguishable from the AUROC-selected models, just
+  often more parsimonious (BART rank-only: 26 features vs run-14's 32). The best Brier of the
+  four, **run 19 (BART rank-only, 0.2192)**, ties the AUROC-selected run-14 BART (0.2190) and
+  does not reach run-10's 0.2185 — i.e. selecting *for* calibration did not buy measurably
+  better calibration. The full-set runs (18, 20) again trail their rank-only counterparts on
+  Brier (0.2205 / 0.2207), consistent with the run-15/16 null on aggregated features.
+  > BART-SE caveat: BART's RFE has no cross-validation, so its 1-SE band uses the spread of
+  > the 6 sampler-seed replicates — that captures sampler noise (~0.003), not generalization
+  > variance, making the band tight (near-peak). The validation Brier curve is also extremely
+  > flat (run 19: 0.2297–0.2319 across 91→10 features), so the *count* is only loosely
+  > determined; what RFE mainly fixes here is the feature *composition* (via the inclusion
+  > ranking), not a sharp elbow. Reproduce: set `SELECTION_METRIC = 'brier'` in the three
+  > `cross_validation/` notebooks; artifacts are suffixed `_brier`.
 
 ## Roadmap
 
