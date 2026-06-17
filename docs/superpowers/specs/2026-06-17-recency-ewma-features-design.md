@@ -74,18 +74,24 @@ schedule equivalent from `endswith('_cumulative_average')` to
 `_rank_change` for the recency families unchanged.
 
 ### Rank-only filter (rfe.ipynb) — generalize
-The current filter keeps `f` if `'cumulative' not in f or f.endswith('_rank'|'_rank_change')`.
-Recency raw values (`_ewma_average`, `_rolling_average`) contain no `'cumulative'`, so they
-would leak through as *un-ranked raw columns*, defeating rank-only mode. Replace with a rule
-that treats all three average families uniformly:
+The current filter keeps `f` if `'cumulative' not in f or f.endswith('_rank'|'_rank_change')`
+— a **substring** test on `'cumulative'` (which is why it correctly catches the schedule
+module's `cumulative_avg_score` columns too, even though those don't end in
+`_cumulative_average`). Recency raw values contain no `'cumulative'`, so they would leak
+through as un-ranked raw columns. Generalize the **substring** test to the three raw-value
+markers (and name the recency columns so they contain `ewma` / `rolling`):
 ```python
-RAW_AVERAGE_SUFFIXES = ('_cumulative_average', '_ewma_average', '_rolling_average',
-                        '_cumulative_average_change')
-keep = (not f.endswith(RAW_AVERAGE_SUFFIXES)) or f.endswith(('_rank', '_rank_change'))
+RAW_VALUE_MARKERS = ('cumulative', 'ewma', 'rolling')
+keep = (not any(m in f for m in RAW_VALUE_MARKERS)) or f.endswith(('_rank', '_rank_change'))
 ```
-i.e. drop every raw average / change column, keep ranks + rank-changes + non-average columns.
+i.e. drop every raw cumulative/ewma/rolling value (and their `_change`), keep ranks +
+rank-changes + non-average columns. Substring (not suffix) preserves the schedule handling.
 Verify the rank-only candidate count is unchanged for the *existing* families (regression
 check) and now also excludes recency raw values.
+
+Naming note: recency columns must contain the markers — weekly/PBP use `_ewma_average` /
+`_rolling_average`; schedule uses `ewma_avg_score` / `rolling_avg_score` (mirroring its
+`cumulative_avg_score`).
 
 ## Feature count
 
