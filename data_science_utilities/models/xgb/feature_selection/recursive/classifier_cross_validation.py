@@ -120,6 +120,28 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
                 )
         return best_num_feats
 
+    def get_best_num_features_1se(self):
+        """Most parsimonious feature count within one standard error of the best CV
+        score. SE is the standard error across folds at the best-scoring count.
+        Direction-aware via HIGHER_IS_BETTER_METRICS, so it works for any metric
+        (roc_auc, brier, log_loss, ...). Replaces the smallest-within-tolerance rule,
+        which over-shrinks on flat curves (run-13 lesson)."""
+        sizes = list(self.all_features.keys())
+        means = list(self.all_model_scores)
+        folds = list(self.all_model_score_folds)
+        higher_is_better = self.model_score_metric in self.HIGHER_IS_BETTER_METRICS
+        best_i = (max if higher_is_better else min)(
+            range(len(means)), key=lambda i: means[i]
+        )
+        best_folds = folds[best_i]
+        se = (float(np.std(best_folds, ddof=1) / np.sqrt(len(best_folds)))
+              if len(best_folds) > 1 else 0.0)
+        if higher_is_better:
+            within = [sizes[i] for i in range(len(means)) if means[i] >= means[best_i] - se]
+        else:
+            within = [sizes[i] for i in range(len(means)) if means[i] <= means[best_i] + se]
+        return min(within)
+
     def _is_curr_score_better(self, curr_score, best_score, min_diff):
         if self.model_score_metric in self.HIGHER_IS_BETTER_METRICS:
             is_better_score = curr_score > best_score
