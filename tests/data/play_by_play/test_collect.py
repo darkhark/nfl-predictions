@@ -399,8 +399,9 @@ class TestGetPlayByPlayFeatures(unittest.TestCase):
         feature_cols = [col for col in features.columns
                         if col.startswith('off_') or col.startswith('def_opp_')]
         # 74 metrics (10 aggregate + 26 directional + 9 phase-3 play + 4 penalty + 1 pace
-        # + 24 situational) x 3 contexts x 2 sides x 3 (avg/rank/rank_change) = 1332
-        self.assertEqual(len(feature_cols), 1332)
+        # + 24 situational) x 3 contexts x 2 sides x 3 (avg/rank/rank_change) = 1332,
+        # + the snap-share family (3 contexts x 2 sides x 3 = 18) = 1350
+        self.assertEqual(len(feature_cols), 1350)
         self.assertEqual(list(features.columns[:3]), ['team', 'season', 'week'])
 
     def test_offense_rank_one_is_best_epa(self):
@@ -834,6 +835,40 @@ class TestSituationalRates(unittest.TestCase):
         self.assertAlmostEqual(row['off_down3_short_pass_rate_competitive_cumulative_average'], 0.5)
         self.assertAlmostEqual(row['off_down3_short_conversion_rate_pass_competitive_cumulative_average'], 1.0)
         self.assertAlmostEqual(row['off_down3_short_conversion_rate_run_competitive_cumulative_average'], 0.0)
+
+
+class TestSnapShare(unittest.TestCase):
+
+    def test_snap_share_sums_to_one_and_matches_context_mix(self):
+        # 3 competitive plays, 1 garbage_leading play -> competitive share 0.75
+        components = collect._aggregate_season(pd.DataFrame([
+            make_play(play_id=1, is_pass=1, epa=0.1, wp=0.5),
+            make_play(play_id=2, is_rush=1, epa=0.1, wp=0.5),
+            make_play(play_id=3, is_pass=1, epa=0.1, wp=0.5),
+            make_play(play_id=4, is_rush=1, epa=0.1, wp=0.99),  # garbage_leading
+        ]))
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        df = collect._add_cumulative_rate_columns(components)
+        row = df.iloc[0]
+        shares = [
+            row['off_snap_share_competitive_cumulative_average'],
+            row['off_snap_share_garbage_leading_cumulative_average'],
+            row['off_snap_share_garbage_trailing_cumulative_average'],
+        ]
+        self.assertAlmostEqual(row['off_snap_share_competitive_cumulative_average'], 0.75)
+        self.assertAlmostEqual(row['off_snap_share_garbage_leading_cumulative_average'], 0.25)
+        self.assertAlmostEqual(sum(shares), 1.0)
+
+    def test_defense_snap_share_context_swapped(self):
+        # the offense's garbage_leading play is the opponent-defense's garbage_trailing snap
+        components = collect._aggregate_season(pd.DataFrame([
+            make_play(play_id=1, is_pass=1, epa=0.1, wp=0.5),
+            make_play(play_id=2, is_rush=1, epa=0.1, wp=0.99),
+        ]))
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        df = collect._add_cumulative_rate_columns(components)
+        row = df.iloc[0]
+        self.assertAlmostEqual(row['def_opp_snap_share_garbage_trailing_cumulative_average'], 0.5)
 
 
 if __name__ == '__main__':

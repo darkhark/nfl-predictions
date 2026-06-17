@@ -555,6 +555,20 @@ def _add_cumulative_rate_columns(df):
                 defense_numerator / defense_denominator.where(defense_denominator != 0)
             )
 
+    # wp-context snap-share: a CROSS-context ratio (each context's play_count over the
+    # season-to-date total across all contexts), so it cannot be a within-context
+    # RATE_METRICS entry. Named *_cumulative_average so it is auto-ranked like the rest.
+    off_total_plays = sum(off_cumulative[f'play_count_{c}'] for c in WP_CONTEXTS)
+    def_total_plays = sum(def_cumulative[f'play_count_{c}'] for c in WP_CONTEXTS)
+    for context in WP_CONTEXTS:
+        rate_columns[f'off_snap_share_{context}_cumulative_average'] = (
+            off_cumulative[f'play_count_{context}'] / off_total_plays.where(off_total_plays != 0)
+        )
+        defense_context = DEFENSE_CONTEXT_SWAP[context]
+        rate_columns[f'def_opp_snap_share_{defense_context}_cumulative_average'] = (
+            def_cumulative[f'play_count_{context}'] / def_total_plays.where(def_total_plays != 0)
+        )
+
     return pd.concat([df, pd.DataFrame(rate_columns)], axis=1)
 
 
