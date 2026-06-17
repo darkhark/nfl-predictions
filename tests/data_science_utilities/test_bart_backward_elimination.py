@@ -176,5 +176,56 @@ class TestBartBackwardElimination(unittest.TestCase):
         self.assertIn('validation_score', rows_seen[0])
 
 
+class TestBartOneSE(unittest.TestCase):
+
+    def _history(self):
+        return pd.DataFrame([
+            {'num_features': 8, 'validation_score': 0.200,
+             'replicate_scores': [0.200, 0.200, 0.200],
+             'features': ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']},
+            {'num_features': 6, 'validation_score': 0.180,
+             'replicate_scores': [0.178, 0.180, 0.182],
+             'features': ['a', 'b', 'c', 'd', 'e', 'f']},
+            {'num_features': 5, 'validation_score': 0.181,
+             'replicate_scores': [0.181, 0.181, 0.181],
+             'features': ['a', 'b', 'c', 'd', 'e']},
+            {'num_features': 3, 'validation_score': 0.230,
+             'replicate_scores': [0.230, 0.230, 0.230],
+             'features': ['a', 'b', 'c']},
+        ])
+
+    def test_lower_is_better_picks_parsimonious_within_band(self):
+        rfe = BartBackwardElimination(make_fit_fn())
+        rfe.history = self._history()
+        best = rfe.get_best_features_1se(higher_is_better=False)
+        self.assertEqual(sorted(best), ['a', 'b', 'c', 'd', 'e'])
+
+    def test_tight_band_returns_optimum(self):
+        rfe = BartBackwardElimination(make_fit_fn())
+        df = self._history()
+        df.at[1, 'replicate_scores'] = [0.180, 0.180, 0.180]
+        rfe.history = df
+        best = rfe.get_best_features_1se(higher_is_better=False)
+        self.assertEqual(sorted(best), ['a', 'b', 'c', 'd', 'e', 'f'])
+
+    def test_higher_is_better_direction(self):
+        rfe = BartBackwardElimination(make_fit_fn())
+        rfe.history = pd.DataFrame([
+            {'num_features': 8, 'validation_score': 0.690,
+             'replicate_scores': [0.690, 0.690, 0.690], 'features': list('abcdefgh')},
+            {'num_features': 6, 'validation_score': 0.710,
+             'replicate_scores': [0.708, 0.710, 0.712], 'features': list('abcdef')},
+            {'num_features': 5, 'validation_score': 0.709,
+             'replicate_scores': [0.709, 0.709, 0.709], 'features': list('abcde')},
+        ])
+        best = rfe.get_best_features_1se(higher_is_better=True)
+        self.assertEqual(sorted(best), list('abcde'))
+
+    def test_run_before_1se_raises(self):
+        rfe = BartBackwardElimination(make_fit_fn())
+        with self.assertRaises(RuntimeError):
+            rfe.get_best_features_1se()
+
+
 if __name__ == '__main__':
     unittest.main()
