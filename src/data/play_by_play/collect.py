@@ -35,7 +35,8 @@ CONTEXT_COL = 'wp_context'
 # rows, penalty_yards may be NaN.
 REQUIRED_PBP_COLUMNS = [
     'posteam', 'defteam', 'season', 'week', 'season_type', 'play_id', 'game_id',
-    'pass', 'rush', 'down', 'yardline_100', 'third_down_converted', 'success',
+    'pass', 'rush', 'down', 'ydstogo', 'goal_to_go',
+    'yardline_100', 'third_down_converted', 'success',
     'epa', 'wp', 'xpass', 'fixed_drive', 'fixed_drive_result',
     'yards_gained', 'run_location', 'run_gap', 'pass_location', 'pass_length',
     'sack', 'qb_hit', 'qb_scramble', 'shotgun', 'no_huddle',
@@ -94,6 +95,36 @@ DIRECTIONAL_RATE_METRICS = (
        for bucket in DIRECTIONAL_BUCKETS]
 )
 
+# Situational play-call buckets: down x distance for downs 2/3 (1st down is ~always
+# 1st-and-10, so it is a single bucket; goal_to_go overrides distance; 4th down excluded).
+SITUATIONAL_SHORT_MAX = 2          # short  = ydstogo <= 2
+SITUATIONAL_MEDIUM_MAX = 6         # medium = 3..6 ; long = >= 7
+SITUATIONAL_BUCKETS = [
+    'down1',
+    'down2_short', 'down2_med', 'down2_long',
+    'down3_short', 'down3_med', 'down3_long',
+    'goalToGo',
+]
+_SITUATIONAL_DOWN3 = {'down3_short', 'down3_med', 'down3_long'}
+
+SITUATIONAL_COMPONENT_COLUMNS = []
+for _b in SITUATIONAL_BUCKETS:
+    SITUATIONAL_COMPONENT_COLUMNS += [f'{_b}_play_count', f'{_b}_pass_count', f'{_b}_run_count']
+    if _b in _SITUATIONAL_DOWN3:
+        SITUATIONAL_COMPONENT_COLUMNS += [f'{_b}_pass_conversion_sum', f'{_b}_run_conversion_sum']
+    else:
+        SITUATIONAL_COMPONENT_COLUMNS += [f'{_b}_pass_success_sum', f'{_b}_run_success_sum']
+
+SITUATIONAL_RATE_METRICS = []
+for _b in SITUATIONAL_BUCKETS:
+    SITUATIONAL_RATE_METRICS.append((f'{_b}_pass_rate', f'{_b}_pass_count', f'{_b}_play_count'))
+    if _b in _SITUATIONAL_DOWN3:
+        SITUATIONAL_RATE_METRICS.append((f'{_b}_conversion_rate_pass', f'{_b}_pass_conversion_sum', f'{_b}_pass_count'))
+        SITUATIONAL_RATE_METRICS.append((f'{_b}_conversion_rate_run', f'{_b}_run_conversion_sum', f'{_b}_run_count'))
+    else:
+        SITUATIONAL_RATE_METRICS.append((f'{_b}_success_rate_pass', f'{_b}_pass_success_sum', f'{_b}_pass_count'))
+        SITUATIONAL_RATE_METRICS.append((f'{_b}_success_rate_run', f'{_b}_run_success_sum', f'{_b}_run_count'))
+
 # Phase 3: trenches, turnover luck, and tendency components. Sacks/hits/scrambles are
 # per dropback, stuffs per carry, fumble-recovery luck per fumble; cpoe and
 # YAC-over-expected average only over plays where nflfastR charts them (2006+ —
@@ -146,7 +177,7 @@ PLAY_COMPONENT_COLUMNS = [
     'early_down_count', 'early_down_success_sum',
     'third_down_count', 'third_down_conversion_sum',
     'xpass_play_count', 'pass_minus_xpass_sum',
-] + DIRECTIONAL_COMPONENT_COLUMNS + PHASE3_PLAY_COMPONENT_COLUMNS
+] + DIRECTIONAL_COMPONENT_COLUMNS + PHASE3_PLAY_COMPONENT_COLUMNS + SITUATIONAL_COMPONENT_COLUMNS
 DRIVE_COMPONENT_COLUMNS = [
     'red_zone_drive_count', 'red_zone_td_drive_count',
     'pace_seconds_sum', 'pace_play_count',
@@ -166,7 +197,7 @@ RATE_METRICS = [
     ('third_down_conversion_rate', 'third_down_conversion_sum', 'third_down_count'),
     ('red_zone_td_rate', 'red_zone_td_drive_count', 'red_zone_drive_count'),
     ('proe', 'pass_minus_xpass_sum', 'xpass_play_count'),
-] + DIRECTIONAL_RATE_METRICS + PHASE3_RATE_METRICS + PENALTY_RATE_METRICS + PACE_RATE_METRICS
+] + DIRECTIONAL_RATE_METRICS + PHASE3_RATE_METRICS + PENALTY_RATE_METRICS + PACE_RATE_METRICS + SITUATIONAL_RATE_METRICS
 
 
 def _assign_run_bucket(plays):
@@ -203,6 +234,26 @@ def _assign_pass_bucket(plays):
     bucket[located] = (
         'pass_' + plays.loc[located, 'pass_length'] + '_' + plays.loc[located, 'pass_location']
     )
+    return bucket
+
+
+def _assign_situational_bucket(plays):
+    """Label each play with its down x distance situational bucket (or None). goal_to_go
+    overrides down/distance; 1st down is a single bucket; 4th down is unlabeled. Distance
+    bins: short <= 2, medium 3..6, long >= 7. Plays outside any bucket still count in the
+    aggregate Phase 1/2/3 metrics."""
+    bucket = pd.Series(None, index=plays.index, dtype='object')
+    goal = plays['goal_to_go'] == 1
+    bucket[goal] = 'goalToGo'
+    rest = ~goal
+    down = plays['down']
+    ytg = plays['ydstogo']
+    bucket[rest & (down == 1)] = 'down1'
+    for d, prefix in ((2, 'down2'), (3, 'down3')):
+        sel = rest & (down == d)
+        bucket[sel & (ytg <= SITUATIONAL_SHORT_MAX)] = f'{prefix}_short'
+        bucket[sel & (ytg > SITUATIONAL_SHORT_MAX) & (ytg <= SITUATIONAL_MEDIUM_MAX)] = f'{prefix}_med'
+        bucket[sel & (ytg > SITUATIONAL_MEDIUM_MAX)] = f'{prefix}_long'
     return bucket
 
 
@@ -258,6 +309,23 @@ def _aggregate_play_components(pbp_df):
         plays[f'{bucket}_attempt_count'] = in_bucket
         plays[f'{bucket}_yards_sum'] = yards * in_bucket
         plays[f'{bucket}_explosive_count'] = is_explosive.astype(int) * in_bucket
+
+    situational_bucket = _assign_situational_bucket(plays)
+    is_pass = plays['pass'] == 1
+    is_rush = plays['rush'] == 1
+    is_success = plays['success'] == 1
+    converted = plays['third_down_converted'].fillna(0) == 1
+    for bucket in SITUATIONAL_BUCKETS:
+        in_bucket = situational_bucket == bucket
+        plays[f'{bucket}_play_count'] = in_bucket.astype(int)
+        plays[f'{bucket}_pass_count'] = (in_bucket & is_pass).astype(int)
+        plays[f'{bucket}_run_count'] = (in_bucket & is_rush).astype(int)
+        if bucket in _SITUATIONAL_DOWN3:
+            plays[f'{bucket}_pass_conversion_sum'] = (in_bucket & is_pass & converted).astype(int)
+            plays[f'{bucket}_run_conversion_sum'] = (in_bucket & is_rush & converted).astype(int)
+        else:
+            plays[f'{bucket}_pass_success_sum'] = (in_bucket & is_pass & is_success).astype(int)
+            plays[f'{bucket}_run_success_sum'] = (in_bucket & is_rush & is_success).astype(int)
 
     plays['sack_count'] = plays['sack']
     plays['qb_hit_count'] = plays['qb_hit']
@@ -486,6 +554,20 @@ def _add_cumulative_rate_columns(df):
             rate_columns[f'def_opp_{metric}_{defense_context}_cumulative_average'] = (
                 defense_numerator / defense_denominator.where(defense_denominator != 0)
             )
+
+    # wp-context snap-share: a CROSS-context ratio (each context's play_count over the
+    # season-to-date total across all contexts), so it cannot be a within-context
+    # RATE_METRICS entry. Named *_cumulative_average so it is auto-ranked like the rest.
+    off_total_plays = sum(off_cumulative[f'play_count_{c}'] for c in WP_CONTEXTS)
+    def_total_plays = sum(def_cumulative[f'play_count_{c}'] for c in WP_CONTEXTS)
+    for context in WP_CONTEXTS:
+        rate_columns[f'off_snap_share_{context}_cumulative_average'] = (
+            off_cumulative[f'play_count_{context}'] / off_total_plays.where(off_total_plays != 0)
+        )
+        defense_context = DEFENSE_CONTEXT_SWAP[context]
+        rate_columns[f'def_opp_snap_share_{defense_context}_cumulative_average'] = (
+            def_cumulative[f'play_count_{context}'] / def_total_plays.where(def_total_plays != 0)
+        )
 
     return pd.concat([df, pd.DataFrame(rate_columns)], axis=1)
 

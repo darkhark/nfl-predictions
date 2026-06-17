@@ -177,6 +177,8 @@ metrics are tracked:
 | 18 | 2026-06-17 | **Brier + 1-SE selection**, full set, XGBoost | 55 | 0.698 | 0.649 | 0.2205 |
 | 19 | 2026-06-17 | **Brier + 1-SE selection**, rank-only, BART | 26 | 0.703 | 0.646 | **0.2192** |
 | 20 | 2026-06-17 | **Brier + 1-SE selection**, full set, BART | 62 | 0.697 | 0.642 | 0.2207 |
+| 21 | 2026-06-17 | **Situational play-call** (down×distance tendency + play-type-split execution + snap-share), rank-only, XGBoost | 24 | 0.697 | 0.638 | 0.2209 |
+| 22 | 2026-06-17 | **BART** on the situational rank-only pool | 61 | 0.696 | 0.649 | 0.2209 |
 
 **What changed between runs**
 
@@ -395,6 +397,29 @@ metrics are tracked:
   > determined; what RFE mainly fixes here is the feature *composition* (via the inclusion
   > ranking), not a sharp elbow. Reproduce: set `SELECTION_METRIC = 'brier'` in the three
   > `cross_validation/` notebooks; artifacts are suffixed `_brier`.
+- **Runs 21–22 (situational play-call features):** added a down×distance play-call family —
+  pass/run **tendency** by down (1st; 2nd/3rd × short ≤2 / medium 3–6 / long 7+) and
+  goal-to-go, **execution split by play type** (`success`/3rd-down `conversion` *on passes*
+  vs *on runs*), plus a **wp-context snap-share** family (how often a team's games are
+  competitive vs blowouts) — all × 3 contexts × 4 perspectives. Candidate pool grew
+  2,349 → 3,249 (+900); new raw columns `ydstogo`/`goal_to_go`; era-safe; unit-tested
+  (`src/data/play_by_play/collect.py`). **Both estimators select these features heavily** —
+  XGBoost kept **6 of 24** at the 1-SE point, BART **18 of 61** (30%; it especially liked the
+  snap-share garbage-time shares and the 3rd-and-short conversion-by-play-type splits) — a far
+  higher survival rate than the run-15 aggregated-values null, so they carry real CV signal.
+  **But neither moved the hold-out:** XGBoost 0.6966 / 0.2209 (vs run-17 rank-only-no-situational
+  0.7005 / 0.2200) and BART 0.6965 / 0.2209 (vs run-19 0.7030 / 0.2192) — both marginally *below*
+  their no-situational baselines, and below the 0.705–0.708 champions. Interpretation: the
+  situational signal is real in-sample but redundant-for-prediction at the team-week-rank grain
+  (selected as substitutes, not additive), and/or the 544-game two-season hold-out is too small
+  to resolve it. **Six feature generations and two estimators have now held the
+  ~0.705 / ~0.219 plateau** — strong evidence the ceiling is a data/regime limit, not a
+  feature-engineering one; the next lever is market signal, not more box/PBP families.
+  > Repro note: feature code is on `extend-rfe-and-bart-rfe`; regenerate caches with
+  > `get_play_by_play_data(range(2003,2026), refresh=True)` then rebuild via
+  > `scripts/data_assembly/predict_game_winner/schedule_and_weekly.py`. The BART run can hit an
+  > intermittent PyTensor compile-cache race on its first parallel iteration (`AssertionError`
+  > in `cmodule.py`); a re-run on the now-warm cache clears it.
 
 ## Roadmap
 

@@ -161,6 +161,22 @@ def _shift_data(combined_data):
     """
     shift the weeks for each team to get the previous week's data. For example, the stats
     for week 1 should be in week 2, and so on
+
+    Cross-season carryover: the shift is per-team but NOT grouped by season -- each team's
+    rows are sorted by (season, week) and shifted with a single shift(1) across their entire
+    history. Consequences:
+      - A team's very first game in the dataset becomes NaN (no prior row). This is the only
+        truly "empty" season opener; the assembly script drops it explicitly (week==1 &
+        season==2003).
+      - Every later season opener (week 1) inherits the team's chronologically LAST prior
+        game rather than starting fresh. Because postseason rows are still present at shift
+        time (the game_type=='REG' filter runs afterward in the assembly script), that prior
+        game is the team's last PLAYOFF game if they made the playoffs, otherwise their
+        regular-season finale. The postseason rows are dropped downstream, but the values
+        they inject into the surviving week-1 REG rows remain.
+    To make each season opener start fresh, group this shift by (target_team, season) and
+    apply the REG filter before the shift rather than after.
+
     :param combined_data: DataFrame with the combined schedule and weekly data
     :return: DataFrame with the stats shifted by one week
     """

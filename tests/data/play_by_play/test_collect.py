@@ -9,7 +9,8 @@ from src.data.play_by_play import collect
 
 def make_play(posteam='AAA', defteam='BBB', season=2023, week=1, season_type='REG',
               play_id=1, game_id='2023_01_AAA_BBB', is_pass=0, is_rush=0,
-              down=1, yardline_100=75.0, third_down_converted=0.0, success=0.0,
+              down=1, ydstogo=10, goal_to_go=0,
+              yardline_100=75.0, third_down_converted=0.0, success=0.0,
               epa=0.0, wp=0.5, xpass=None, fixed_drive=1, fixed_drive_result='Punt',
               yards_gained=0.0, run_location=None, run_gap=None,
               pass_location=None, pass_length=None,
@@ -23,7 +24,8 @@ def make_play(posteam='AAA', defteam='BBB', season=2023, week=1, season_type='RE
     return {
         'posteam': posteam, 'defteam': defteam, 'season': season, 'week': week,
         'season_type': season_type, 'play_id': play_id, 'game_id': game_id,
-        'pass': is_pass, 'rush': is_rush, 'down': down, 'yardline_100': yardline_100,
+        'pass': is_pass, 'rush': is_rush, 'down': down,
+        'ydstogo': ydstogo, 'goal_to_go': goal_to_go, 'yardline_100': yardline_100,
         'third_down_converted': third_down_converted, 'success': success, 'epa': epa,
         # float('nan') rather than None so the xpass column is float64 like real
         # nflfastR data, not object dtype
@@ -396,8 +398,10 @@ class TestGetPlayByPlayFeatures(unittest.TestCase):
         features = self._features()
         feature_cols = [col for col in features.columns
                         if col.startswith('off_') or col.startswith('def_opp_')]
-        # 50 metrics (10 aggregate + 26 directional + 9 phase-3 play + 4 penalty + 1 pace) x 3 x 2 x 3
-        self.assertEqual(len(feature_cols), 900)
+        # 74 metrics (10 aggregate + 26 directional + 9 phase-3 play + 4 penalty + 1 pace
+        # + 24 situational) x 3 contexts x 2 sides x 3 (avg/rank/rank_change) = 1332,
+        # + the snap-share family (3 contexts x 2 sides x 3 = 18) = 1350
+        self.assertEqual(len(feature_cols), 1350)
         self.assertEqual(list(features.columns[:3]), ['team', 'season', 'week'])
 
     def test_offense_rank_one_is_best_epa(self):
@@ -448,9 +452,10 @@ class TestDirectionalConstants(unittest.TestCase):
             self.assertIn(column, collect.REQUIRED_PBP_COLUMNS)
 
     def test_directional_lists_wired_into_aggregates(self):
-        # 56 directional+aggregate + 12 phase-3 play + 4 penalty + 2 pace = 74; RATE_METRICS 36 + 9 + 4 + 1 = 50
-        self.assertEqual(len(collect.COMPONENT_COLUMNS), 74)
-        self.assertEqual(len(collect.RATE_METRICS), 50)
+        # 56 directional+aggregate + 12 phase-3 play + 4 penalty + 2 pace + 40 situational = 114
+        self.assertEqual(len(collect.COMPONENT_COLUMNS), 114)
+        # RATE_METRICS 36 + 9 + 4 + 1 = 50, + 24 situational = 74
+        self.assertEqual(len(collect.RATE_METRICS), 74)
         for bucket in collect.DIRECTIONAL_BUCKETS:
             self.assertIn(f'{bucket}_attempt_count', collect.PLAY_COMPONENT_COLUMNS)
 
@@ -724,6 +729,146 @@ class TestPaceComponents(unittest.TestCase):
         self.assertEqual(row['red_zone_td_drive_count'], 1)
         self.assertEqual(row['pace_seconds_sum'], 50.0)
         self.assertEqual(row['pace_play_count'], 2)
+
+
+class TestAssignSituationalBucket(unittest.TestCase):
+
+    def _bucket(self, **kw):
+        plays = pd.DataFrame([collect.make_play(**kw)]) if False else None
+        # build directly from kwargs via a one-row frame
+        import pandas as pd
+        row = {'down': kw['down'], 'ydstogo': kw['ydstogo'], 'goal_to_go': kw.get('goal_to_go', 0)}
+        return collect._assign_situational_bucket(pd.DataFrame([row])).iloc[0]
+
+    def test_first_down_single_bucket(self):
+        self.assertEqual(self._bucket(down=1, ydstogo=10), 'down1')
+        self.assertEqual(self._bucket(down=1, ydstogo=4), 'down1')   # 1st-and-short still down1
+
+    def test_goal_to_go_overrides_distance_and_down(self):
+        self.assertEqual(self._bucket(down=1, ydstogo=3, goal_to_go=1), 'goalToGo')
+        self.assertEqual(self._bucket(down=3, ydstogo=1, goal_to_go=1), 'goalToGo')
+
+    def test_down2_distance_bins_and_boundaries(self):
+        self.assertEqual(self._bucket(down=2, ydstogo=2), 'down2_short')   # <=2 short
+        self.assertEqual(self._bucket(down=2, ydstogo=3), 'down2_med')     # 3..6 medium
+        self.assertEqual(self._bucket(down=2, ydstogo=6), 'down2_med')
+        self.assertEqual(self._bucket(down=2, ydstogo=7), 'down2_long')    # >=7 long
+
+    def test_down3_distance_bins(self):
+        self.assertEqual(self._bucket(down=3, ydstogo=1), 'down3_short')
+        self.assertEqual(self._bucket(down=3, ydstogo=5), 'down3_med')
+        self.assertEqual(self._bucket(down=3, ydstogo=12), 'down3_long')
+
+    def test_fourth_down_gets_no_bucket(self):
+        # pd.Series(None, dtype='object') stores NaN (not None) under pandas 2.2.3, the
+        # same as the existing _assign_run_bucket "no bucket" sentinel; assert null-ness
+        # rather than literal None so the test matches the established codebase behavior.
+        self.assertTrue(pd.isna(self._bucket(down=4, ydstogo=1)))
+
+
+class TestSituationalComponents(unittest.TestCase):
+
+    def setUp(self):
+        # all competitive (wp=0.5). 3rd-and-short: one converted pass, one stuffed run.
+        # 2nd-and-long: one successful pass. 1st down: one failed run.
+        self.agg = collect._aggregate_play_components(pd.DataFrame([
+            make_play(play_id=1, is_pass=1, down=3, ydstogo=1, third_down_converted=1.0, success=1.0, epa=0.4),
+            make_play(play_id=2, is_rush=1, down=3, ydstogo=1, third_down_converted=0.0, success=0.0, epa=-0.3),
+            make_play(play_id=3, is_pass=1, down=2, ydstogo=9, success=1.0, epa=0.5),
+            make_play(play_id=4, is_rush=1, down=1, ydstogo=10, success=0.0, epa=-0.1),
+        ]))
+
+    def _val(self, col):
+        return self.agg.loc[self.agg[collect.CONTEXT_COL] == collect.COMPETITIVE, col].iloc[0]
+
+    def test_bucket_play_pass_run_counts(self):
+        self.assertEqual(self._val('down3_short_play_count'), 2)
+        self.assertEqual(self._val('down3_short_pass_count'), 1)
+        self.assertEqual(self._val('down3_short_run_count'), 1)
+        self.assertEqual(self._val('down1_play_count'), 1)
+        self.assertEqual(self._val('down2_long_pass_count'), 1)
+
+    def test_down3_conversion_components_split_by_play_type(self):
+        self.assertEqual(self._val('down3_short_pass_conversion_sum'), 1)  # the converted pass
+        self.assertEqual(self._val('down3_short_run_conversion_sum'), 0)   # stuffed run
+
+    def test_non_down3_uses_success_components(self):
+        self.assertEqual(self._val('down2_long_pass_success_sum'), 1)
+        self.assertEqual(self._val('down1_run_success_sum'), 0)
+
+    def test_play_count_equals_pass_plus_run(self):
+        for b in collect.SITUATIONAL_BUCKETS:
+            self.assertEqual(self._val(f'{b}_play_count'),
+                             self._val(f'{b}_pass_count') + self._val(f'{b}_run_count'))
+
+
+class TestSituationalRates(unittest.TestCase):
+
+    def test_situational_rate_columns_exist_off_and_def(self):
+        # one team-week of competitive plays so cumulative rates are well-defined
+        components = collect._aggregate_season(pd.DataFrame([
+            make_play(play_id=1, is_pass=1, down=3, ydstogo=1, third_down_converted=1.0, success=1.0, epa=0.4, wp=0.5),
+            make_play(play_id=2, is_rush=1, down=3, ydstogo=1, third_down_converted=0.0, success=0.0, epa=-0.2, wp=0.5),
+            make_play(play_id=3, is_pass=1, down=2, ydstogo=9, success=1.0, epa=0.5, wp=0.5),
+        ]))
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        df = collect._add_cumulative_rate_columns(components)
+        # tendency + play-type-split execution, offense and defense, competitive context
+        for col in [
+            'off_down3_short_pass_rate_competitive_cumulative_average',
+            'off_down3_short_conversion_rate_pass_competitive_cumulative_average',
+            'off_down3_short_conversion_rate_run_competitive_cumulative_average',
+            'off_down2_long_success_rate_pass_competitive_cumulative_average',
+            'def_opp_down3_short_pass_rate_competitive_cumulative_average',
+        ]:
+            self.assertIn(col, df.columns)
+
+    def test_situational_rate_values(self):
+        components = collect._aggregate_season(pd.DataFrame([
+            make_play(play_id=1, is_pass=1, down=3, ydstogo=1, third_down_converted=1.0, success=1.0, epa=0.4, wp=0.5),
+            make_play(play_id=2, is_rush=1, down=3, ydstogo=1, third_down_converted=0.0, success=0.0, epa=-0.2, wp=0.5),
+        ]))
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        df = collect._add_cumulative_rate_columns(components)
+        row = df.iloc[0]
+        # 3rd-and-short: 1 pass of 2 plays -> pass_rate 0.5; the pass converted -> 1.0
+        self.assertAlmostEqual(row['off_down3_short_pass_rate_competitive_cumulative_average'], 0.5)
+        self.assertAlmostEqual(row['off_down3_short_conversion_rate_pass_competitive_cumulative_average'], 1.0)
+        self.assertAlmostEqual(row['off_down3_short_conversion_rate_run_competitive_cumulative_average'], 0.0)
+
+
+class TestSnapShare(unittest.TestCase):
+
+    def test_snap_share_sums_to_one_and_matches_context_mix(self):
+        # 3 competitive plays, 1 garbage_leading play -> competitive share 0.75
+        components = collect._aggregate_season(pd.DataFrame([
+            make_play(play_id=1, is_pass=1, epa=0.1, wp=0.5),
+            make_play(play_id=2, is_rush=1, epa=0.1, wp=0.5),
+            make_play(play_id=3, is_pass=1, epa=0.1, wp=0.5),
+            make_play(play_id=4, is_rush=1, epa=0.1, wp=0.99),  # garbage_leading
+        ]))
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        df = collect._add_cumulative_rate_columns(components)
+        row = df.iloc[0]
+        shares = [
+            row['off_snap_share_competitive_cumulative_average'],
+            row['off_snap_share_garbage_leading_cumulative_average'],
+            row['off_snap_share_garbage_trailing_cumulative_average'],
+        ]
+        self.assertAlmostEqual(row['off_snap_share_competitive_cumulative_average'], 0.75)
+        self.assertAlmostEqual(row['off_snap_share_garbage_leading_cumulative_average'], 0.25)
+        self.assertAlmostEqual(sum(shares), 1.0)
+
+    def test_defense_snap_share_context_swapped(self):
+        # the offense's garbage_leading play is the opponent-defense's garbage_trailing snap
+        components = collect._aggregate_season(pd.DataFrame([
+            make_play(play_id=1, is_pass=1, epa=0.1, wp=0.5),
+            make_play(play_id=2, is_rush=1, epa=0.1, wp=0.99),
+        ]))
+        components = collect._add_game_count_columns(components).reset_index(drop=True)
+        df = collect._add_cumulative_rate_columns(components)
+        row = df.iloc[0]
+        self.assertAlmostEqual(row['def_opp_snap_share_garbage_trailing_cumulative_average'], 0.5)
 
 
 if __name__ == '__main__':
