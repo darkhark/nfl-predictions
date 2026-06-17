@@ -69,5 +69,23 @@ class TestMinFeaturesFloor(unittest.TestCase):
         self.assertIn('num_features', seen[0])
 
 
+class TestBrierMetric(unittest.TestCase):
+
+    def test_brier_metric_runs_and_scores_are_probabilities(self):
+        X, y = make_synthetic_frame()
+        rfe = ClassifierCrossValidationRecursiveFeatureSelection(
+            X, y, dict(FAST_XGB_PARAMS), model_score_metric='brier'
+        )
+        rfe.get_optimal_features_no_grouped_records(drop_rate=0.3, max_iter=3, n_folds=3)
+        self.assertTrue(all(0.0 <= s <= 1.0 for s in rfe.all_model_scores))
+        self.assertEqual(len(rfe.all_model_scores), 3)
+
+    def test_brier_is_treated_as_lower_is_better(self):
+        rfe = ClassifierCrossValidationRecursiveFeatureSelection(
+            *make_synthetic_frame(), dict(FAST_XGB_PARAMS), model_score_metric='brier'
+        )
+        self.assertNotIn('brier', rfe.HIGHER_IS_BETTER_METRICS)
+
+
 if __name__ == '__main__':
     unittest.main()

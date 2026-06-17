@@ -1,5 +1,5 @@
 from sklearn.metrics import (
-    roc_auc_score, log_loss, f1_score, precision_score,
+    roc_auc_score, log_loss, brier_score_loss, f1_score, precision_score,
     recall_score, accuracy_score
 )
 from xgboost import XGBClassifier
@@ -187,6 +187,8 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
             score = roc_auc_score(y_test, preds)
         elif self.model_score_metric == 'log_loss':
             score = log_loss(y_test, preds)
+        elif self.model_score_metric == 'brier':
+            score = brier_score_loss(y_test, preds)
         elif self.model_score_metric == 'f1':
             score = f1_score(y_test, preds.round())
         elif self.model_score_metric == 'precision':
@@ -196,7 +198,7 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
         elif self.model_score_metric == 'accuracy':
             score = accuracy_score(y_test, preds.round())
         else:
-            raise ValueError('model_score_metric must be one of roc_auc, log_loss, f1, precision, recall, accuracy')
+            raise ValueError('model_score_metric must be one of roc_auc, log_loss, brier, f1, precision, recall, accuracy')
         return score
 
     def _get_non_zero_importances(self, model):
