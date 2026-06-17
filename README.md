@@ -179,6 +179,8 @@ metrics are tracked:
 | 20 | 2026-06-17 | **Brier + 1-SE selection**, full set, BART | 62 | 0.697 | 0.642 | 0.2207 |
 | 21 | 2026-06-17 | **Situational play-call** (down×distance tendency + play-type-split execution + snap-share), rank-only, XGBoost | 24 | 0.697 | 0.638 | 0.2209 |
 | 22 | 2026-06-17 | **BART** on the situational rank-only pool | 61 | 0.696 | 0.649 | 0.2209 |
+| 23 | 2026-06-17 | **Recency** (EWMA halflife 3 + rolling 4, every cumulative-average stat), rank-only, XGBoost | 36 | 0.693 | 0.627 | 0.2321 |
+| 24 | 2026-06-17 | **BART** on the recency rank-only pool | 58 | 0.691 | 0.633 | 0.2223 |
 
 **What changed between runs**
 
@@ -420,6 +422,26 @@ metrics are tracked:
   > `scripts/data_assembly/predict_game_winner/schedule_and_weekly.py`. The BART run can hit an
   > intermittent PyTensor compile-cache race on its first parallel iteration (`AssertionError`
   > in `cmodule.py`); a re-run on the now-warm cache clears it.
+- **Runs 23–24 (recency: EWMA + rolling):** the one remaining non-market lever — a new
+  *temporal* axis. Added EWMA (halflife 3) and rolling (last 4) versions of **every**
+  cumulative-average stat (weekly box, schedule points, PBP rates) *alongside* the season
+  averages, each ranked, so RFE picks form-vs-season-average per stat (pool 3,249 → 9,297;
+  rank-only 2,129 → 6,161; the 215 MB regenerated parquet is now gitignored). **Recency is the
+  most CV-attractive family of the whole project — both estimators select it at ~50%** (XGBoost
+  18/36, BART 29/58) — yet it is the only family that **actively degrades the hold-out**:
+  XGBoost **0.693 / 0.2321** (vs no-recency run-21 0.6966 / 0.2209), BART **0.691 / 0.2223**
+  (vs run-22 0.6965 / 0.2209) — the worst Brier of any rank-only run, on *both* estimators.
+  Interpretation: recency-weighting trades bias for **variance** (small effective sample), so
+  recent form looks predictive in CV but chases noise that doesn't generalize on the 544-game
+  hold-out. **The non-market feature levers are now exhausted** — aggregated values (runs
+  15/16, null), situational play-call (runs 21/22, null), recency (runs 23/24, negative), and
+  matchup-diffs (dropped as redundant with ranks). Across **seven feature generations and two
+  estimators** the ~0.705 / ~0.219 ceiling has not moved; it is a data/regime limit. The only
+  untried lever is **market signal** (de-vigged moneyline-implied probability as a feature and
+  baseline), deferred by choice.
+  > Repro: `SELECTION_METRIC = 'brier'` in the `cross_validation/` notebooks on the
+  > `recency-ewma-features` branch; rebuild the dataset via the assembly script (recency is
+  > derived post-cache — no PBP re-download).
 
 ## Roadmap
 
