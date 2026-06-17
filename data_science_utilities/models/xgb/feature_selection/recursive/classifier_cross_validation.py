@@ -25,6 +25,7 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
         self.test_preds = {}
         self.all_models = {}
         self.all_model_scores = []
+        self.all_model_score_folds = []
         self.importances = None
 
     def get_optimal_features_no_grouped_records(self, drop_rate=.1, max_iter=10, verbose=0, base_margin=None,
@@ -71,6 +72,7 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
                     self.all_models[len(train_features)] = {fold: model}
                     self.test_preds[len(train_features)] = {fold: test_preds}
             self.all_model_scores.append(np.mean(model_scores))
+            self.all_model_score_folds.append(list(model_scores))
             if on_iteration is not None:
                 on_iteration({
                     'iteration': i + 1,

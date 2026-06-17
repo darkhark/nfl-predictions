@@ -87,5 +87,17 @@ class TestBrierMetric(unittest.TestCase):
         self.assertNotIn('brier', rfe.HIGHER_IS_BETTER_METRICS)
 
 
+class TestPerFoldStorage(unittest.TestCase):
+
+    def test_per_fold_scores_stored_and_consistent_with_means(self):
+        X, y = make_synthetic_frame()
+        rfe = ClassifierCrossValidationRecursiveFeatureSelection(X, y, dict(FAST_XGB_PARAMS))
+        rfe.get_optimal_features_no_grouped_records(drop_rate=0.3, max_iter=3, n_folds=3)
+        self.assertEqual(len(rfe.all_model_score_folds), len(rfe.all_model_scores))
+        for folds, mean in zip(rfe.all_model_score_folds, rfe.all_model_scores):
+            self.assertEqual(len(folds), 3)
+            self.assertAlmostEqual(sum(folds) / len(folds), mean)
+
+
 if __name__ == '__main__':
     unittest.main()
