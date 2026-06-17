@@ -39,8 +39,9 @@ needs one small addition at step 4 — see below.)
 ## New raw columns
 
 Add to `REQUIRED_PBP_COLUMNS`: **`ydstogo`**, **`goal_to_go`** (both nflverse-native, all
-eras — no pre-2006 charting gap). Bump the PBP cache version so cached seasons in
-`data/play_by_play/aggregated/` re-aggregate.
+eras — no pre-2006 charting gap). There is no cache-version constant — cached seasons in
+`data/play_by_play/aggregated/` are invalidated by re-running with `refresh=True`
+(re-downloads + re-aggregates); the new columns appear only after that regeneration.
 
 ## Bucket definitions
 
