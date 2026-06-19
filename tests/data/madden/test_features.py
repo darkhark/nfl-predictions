@@ -76,5 +76,29 @@ class TestMatchupColumns(unittest.TestCase):
         self.assertEqual(out['madden_matchup_pass_rush'], -30)      # 60-90
 
 
+class TestMatchupColumnsNoCoverage(unittest.TestCase):
+    def test_missing_source_cols_produce_float_nan(self):
+        """add_madden_matchup_columns on a frame with no madden source columns must
+        produce float64 (not object) columns so XGBoost accepts them."""
+        df = pd.DataFrame([
+            {'team': 'KC', 'season': 2025, 'week': 1},
+            {'team': 'SF', 'season': 2025, 'week': 1},
+        ])
+        out = features.add_madden_matchup_columns(df)
+        expected_cols = [
+            'madden_matchup_pass_pro',
+            'madden_matchup_interior',
+            'madden_matchup_skill_cover',
+            'madden_matchup_pass_rush',
+        ]
+        for col in expected_cols:
+            self.assertIn(col, out.columns, msg=f'{col} missing from output')
+            self.assertTrue(
+                pd.api.types.is_float_dtype(out[col]),
+                msg=f'{col} has dtype {out[col].dtype}, expected float',
+            )
+            self.assertTrue(out[col].isna().all(), msg=f'{col} should be all NaN')
+
+
 if __name__ == '__main__':
     unittest.main()

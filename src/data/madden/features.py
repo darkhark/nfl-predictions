@@ -98,7 +98,7 @@ def add_prev_season_diff(df, prev):
 
 
 def _safe(df, col):
-    return df[col] if col in df.columns else pd.Series([pd.NA] * len(df), index=df.index)
+    return df[col] if col in df.columns else pd.Series(np.nan, index=df.index, dtype='float64')
 
 
 def add_madden_matchup_columns(df):
