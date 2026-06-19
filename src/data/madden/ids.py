@@ -30,5 +30,4 @@ def attach_gsis_id(df, season, processed=None):
     out = df.copy()
     keys = out['full_name'].map(normalize_name) + '|' + out['team'].astype(str)
     out['gsis_id'] = keys.map(lookup)
-    out['gsis_id'] = out['gsis_id'].where(out['gsis_id'].notna(), other=pd.NA)
     return out
