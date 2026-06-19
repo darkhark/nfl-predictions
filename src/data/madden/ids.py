@@ -11,6 +11,20 @@ PROCESSED_URL_TEMPLATE = (
 )
 _SUFFIXES = {'jr', 'sr', 'ii', 'iii', 'iv', 'v'}
 
+# Map Madden side-aware positions to the coarse `position` vocab in processed/*.csv
+# (processed vocab: QB RB WR TE OL DL LB DB K P LS)
+MADDEN_TO_COARSE_POSITION = {
+    'QB': 'QB',
+    'HB': 'RB', 'FB': 'RB',
+    'WR': 'WR',
+    'TE': 'TE',
+    'LT': 'OL', 'LG': 'OL', 'C': 'OL', 'RG': 'OL', 'RT': 'OL',
+    'LE': 'DL', 'RE': 'DL', 'DT': 'DL', 'NT': 'DL',
+    'LOLB': 'LB', 'ROLB': 'LB', 'MLB': 'LB', 'OLB': 'LB', 'ILB': 'LB',
+    'CB': 'DB', 'FS': 'DB', 'SS': 'DB',
+    'K': 'K', 'P': 'P', 'LS': 'LS',
+}
+
 
 def normalize_name(name):
     """Lowercase, drop punctuation and generational suffixes for joining."""
@@ -19,15 +33,51 @@ def normalize_name(name):
     return ' '.join(tokens)
 
 
+def _build_name_pos_lookup(proc):
+    """Build a name|coarse_position -> gsis_id dict; entries with >1 distinct gsis
+    are set to None so the fallback never creates a false match.
+    Returns an empty dict if `proc` has no `position` column."""
+    if 'position' not in proc.columns:
+        return {}
+    lookup = {}
+    for _, row in proc.iterrows():
+        k = row['_norm_name'] + '|' + str(row['position'])
+        if k in lookup:
+            if lookup[k] != row['player_id']:
+                lookup[k] = None  # ambiguous — multiple distinct gsis
+        else:
+            lookup[k] = row['player_id']
+    return lookup
+
+
 def attach_gsis_id(df, season, processed=None):
     if processed is None:
         processed = pd.read_csv(PROCESSED_URL_TEMPLATE.format(season=season))
     proc = processed.copy()
     proc['team'] = proc['team'].replace(TEAM_ABBR_MAPPINGS)
-    proc['_key'] = proc['fullname'].map(normalize_name) + '|' + proc['team'].astype(str)
-    lookup = dict(zip(proc['_key'], proc['player_id']))
+    proc['_norm_name'] = proc['fullname'].map(normalize_name)
+
+    # Primary lookup: normalized_name | team
+    proc['_key'] = proc['_norm_name'] + '|' + proc['team'].astype(str)
+    lookup_primary = dict(zip(proc['_key'], proc['player_id']))
+
+    # Fallback lookup: normalized_name | coarse_position (no team)
+    # Only used when primary misses; skipped if key is ambiguous (None).
+    lookup_fallback = _build_name_pos_lookup(proc)
 
     out = df.copy()
-    keys = out['full_name'].map(normalize_name) + '|' + out['team'].astype(str)
-    out['gsis_id'] = keys.map(lookup)
+    out['_norm_name'] = out['full_name'].map(normalize_name)
+
+    # Primary match
+    primary_keys = out['_norm_name'] + '|' + out['team'].astype(str)
+    out['gsis_id'] = primary_keys.map(lookup_primary)
+
+    # Fallback: relax team, disambiguate by coarse position
+    mask = out['gsis_id'].isna()
+    if mask.any():
+        coarse_pos = out.loc[mask, 'position'].map(MADDEN_TO_COARSE_POSITION)
+        fallback_keys = out.loc[mask, '_norm_name'] + '|' + coarse_pos.astype(str)
+        out.loc[mask, 'gsis_id'] = fallback_keys.map(lookup_fallback)
+
+    out = out.drop(columns=['_norm_name'])
     return out
