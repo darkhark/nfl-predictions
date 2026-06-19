@@ -94,6 +94,12 @@ class TestContentFamily(unittest.TestCase):
         with self.assertRaises(ValueError):
             content_family('some_totally_unknown_column')
 
+    def test_madden_columns_classify_as_madden_ratings(self):
+        for col in ['target_madden_qb_ovr', 'opp_madden_edge_ovr',
+                    'target_madden_lt_ovr_diff_prev', 'madden_matchup_pass_pro',
+                    'opp_madden_safety_ovr_diff_prev_season']:
+            self.assertEqual(content_family(col), 'madden_ratings')
+
 
 class TestFormTags(unittest.TestCase):
 
