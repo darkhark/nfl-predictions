@@ -86,3 +86,24 @@ def add_prev_season_diff(df, prev):
         mapped = out['team'].map(prev_by_team[col])
         out[f'{col}_diff_prev_season'] = out[col] - mapped
     return out
+
+
+def _safe(df, col):
+    return df[col] if col in df.columns else pd.Series([pd.NA] * len(df), index=df.index)
+
+
+def add_madden_matchup_columns(df):
+    """Directional trench/coverage talent deltas, computed AFTER the target/opp merge."""
+    out = df.copy()
+    out['madden_matchup_pass_pro'] = (
+        _safe(out, 'target_madden_exterior_ol_ovr') - _safe(out, 'opp_madden_edge_ovr'))
+    out['madden_matchup_interior'] = (
+        _safe(out, 'target_madden_interior_ol_ovr')
+        - _safe(out, 'opp_madden_interior_dl_ovr'))
+    out['madden_matchup_skill_cover'] = (
+        _safe(out, 'target_madden_receivers_ovr')
+        - (_safe(out, 'opp_madden_cornerback_ovr')
+           + _safe(out, 'opp_madden_safety_ovr')) / 2)
+    out['madden_matchup_pass_rush'] = (
+        _safe(out, 'opp_madden_exterior_ol_ovr') - _safe(out, 'target_madden_edge_ovr'))
+    return out

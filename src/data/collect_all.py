@@ -4,6 +4,8 @@ from src.data.next_gen_stats import collect as next_gen_collect
 from src.data.play_by_play import collect as pbp_collect
 from src.data.weekly import collect as weekly_collect
 from src.data.schedule import collect as schedule_collect
+from src.data.madden import collect as madden_collect
+from src.data.madden import features as madden_features
 
 
 def get_all_data(years):
@@ -83,6 +85,23 @@ def get_schedule_and_weekly_data(years, include_play_by_play=False):
     combined_data = pd.concat([combined_data, target_win_df], axis=1)
 
     combined_data = _shift_data(combined_data)
+
+    madden_tw = madden_collect.get_madden_data(years)
+    _madden_cols = [c for c in madden_tw.columns if c not in ('team', 'season', 'week')]
+
+    target_madden = madden_tw.rename(
+        columns={'team': 'target_team',
+                 **{c: f'target_{c}' for c in _madden_cols}})
+    opp_madden = madden_tw.rename(
+        columns={'team': 'opp_team',
+                 **{c: f'opp_{c}' for c in _madden_cols}})
+
+    combined_data = combined_data.merge(
+        target_madden, on=['target_team', 'season', 'week'], how='left', validate='many_to_one')
+    combined_data = combined_data.merge(
+        opp_madden, on=['opp_team', 'season', 'week'], how='left', validate='many_to_one')
+    combined_data = madden_features.add_madden_matchup_columns(combined_data)
+
     return combined_data
 
 

@@ -61,5 +61,20 @@ class TestPrevSeasonDiff(unittest.TestCase):
         self.assertEqual(out.iloc[0]['madden_qb_ovr_diff_prev_season'], 3)
 
 
+class TestMatchupColumns(unittest.TestCase):
+    def test_matchup_deltas(self):
+        df = pd.DataFrame([{
+            'target_madden_exterior_ol_ovr': 90, 'opp_madden_edge_ovr': 80,
+            'target_madden_interior_ol_ovr': 85, 'opp_madden_interior_dl_ovr': 75,
+            'target_madden_receivers_ovr': 88, 'opp_madden_cornerback_ovr': 70,
+            'opp_madden_safety_ovr': 72, 'opp_madden_exterior_ol_ovr': 60,
+            'target_madden_edge_ovr': 90}])
+        out = features.add_madden_matchup_columns(df).iloc[0]
+        self.assertEqual(out['madden_matchup_pass_pro'], 10)        # 90-80
+        self.assertEqual(out['madden_matchup_interior'], 10)        # 85-75
+        self.assertEqual(out['madden_matchup_skill_cover'], 88 - 71)  # 88-(70+72)/2
+        self.assertEqual(out['madden_matchup_pass_rush'], -30)      # 60-90
+
+
 if __name__ == '__main__':
     unittest.main()
