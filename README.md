@@ -78,6 +78,13 @@ Reusable, model-agnostic-ish components built around XGBoost:
   including grouped and known-factor variants.
 - **Anomaly scoring** (`models/xgb/anomaly_score/score.py`): per-column XGBRegressor
   residual scoring to flag unusual feature values during data validation.
+- **Feature-group ablation** (`feature_groups/`): partitions the candidate pool into
+  mutually-exclusive content families and runs the full 2^G subset sweep over
+  season-blocked rolling-origin CV, decomposing skill into per-group **Shapley main
+  effects** and **pairwise Shapley interaction indices** (estimator-agnostic, with
+  XGBoost/BART fold scorers). Answers "which families work together?" *directly* instead
+  of inferring it from add-one-family runs — see the
+  [feature-group ablation result](#feature-group-ablation-are-the-feature-families-complementary-or-redundant).
 
 ## Project structure
 
@@ -443,13 +450,65 @@ metrics are tracked:
   > `recency-ewma-features` branch; rebuild the dataset via the assembly script (recency is
   > derived post-cache — no PBP re-download).
 
+## Feature-group ablation: are the feature families complementary or redundant?
+
+Runs 5–24 add one feature *family* at a time and let RFE pick columns, which can only
+*infer* redundancy run-by-run (a family is selected heavily yet the hold-out doesn't move).
+A dedicated harness (`data_science_utilities/feature_groups/`) measures it directly: it
+partitions the ~9,297-column pool into mutually-exclusive **content families**, scores the
+**full 2^G subset sweep** with a *fixed, untuned* regularised XGBoost per subset (no
+per-subset RFE/tuning, so the *group* effect is isolated from the *selection* effect),
+evaluates on **season-blocked rolling-origin CV** (test = each of 2019–2025; the two prior
+seasons are the early-stopping window), and decomposes skill into per-group **Shapley main
+effects** and **pairwise Shapley interaction indices**.
+
+The 2026-06-17 run swept the **7 families present in the dataset** — `box_score`,
+`schedule_points`, `pbp_phase1/2/3`, `situational_playcall`, `snap_share` — over
+`context_rest` as an always-on base (128 subsets × 7 folds = **896 fits**, Brier). These
+numbers are rolling-origin CV on an *untuned* model and are **NOT comparable to the tuned
+hold-out table above — read the deltas between subsets, not the absolute level.**
+
+- **Every one of the 21 pairwise interactions is negative (sub-additive); zero are
+  positive.** No pair of families complements another. Most sub-additive:
+  `box_score + pbp_phase1` (−0.0040); least: `pbp_phase2_directional + pbp_phase3` (−0.0024).
+- **Standalone vs leave-one-out is the redundancy fingerprint.** Each family lowers Brier by
+  ~0.016–0.022 *on its own*, but each family's *marginal* value once the other six are
+  present is ≈ 0 (several slightly negative) — a redundancy of ~0.018–0.021 for **all
+  seven**. They are mutually interchangeable carriers of the same signal.
+- **Parsimony beats the kitchen sink.** Base-only (8 context cols) Brier 0.2507 → best single
+  family ~0.231–0.234 → the best subset is just **3 families**
+  (`box_score + pbp_phase1 + schedule_points`, 0.2273); the best overall is a 4-family set
+  (0.2271). The **full 7-family set (0.2299) ranks only 72/128** — adding families past the
+  first ~3 is mildly *worse*, not better. ~80% of the achievable improvement comes from the
+  first family added.
+- Shapley main effects are all small and similar (+0.0019 to +0.0046), with `pbp_phase1` the
+  largest individually.
+
+This is the crowding-out the experiment log inferred for seven feature generations, now
+measured directly across all families at once: the box/pbp/schedule families are **tapped
+out**. **Caveats:** on a metric sitting at the documented ~0.219-Brier plateau, a negative
+interaction is consistent with *both* genuine informational redundancy *and* metric-ceiling
+saturation — the index cannot separate them (corroborate with feature correlations or
+re-run in log-loss space); and the cross-fold SE is a *lower bound*, because the
+expanding-window folds share nested training data and overlapping validation windows.
+**Implication:** the only sources likely to carry *orthogonal* signal are the two **not yet
+in the pool** — **market** (de-vigged odds; the `schedule` collector supports
+`keep_odds=True`) and **Next Gen Stats** (player-tracking metrics; collected but not
+integrated, and blocked on the season-average `_diff` leakage fix plus team-week
+aggregation). Reproduce: `cross_validation/group_ablation.ipynb` or
+`cross_validation/run_group_ablation.py`; artifacts in `data/predict_games/group_ablation/`.
+
 ## Roadmap
 
 - Improve predictive performance toward / past a Vegas-implied baseline. Five feature
   generations (runs 5–14) across two estimators have plateaued at ~0.705–0.708 ROC-AUC /
-  ~0.219 Brier, so the next lever is likely market signal (de-vigged moneyline-implied
-  probabilities as features and as the comparison baseline) rather than more box/pbp
-  features — the `schedule` collector already supports `keep_odds=True`.
+  ~0.219 Brier, and the [feature-group ablation](#feature-group-ablation-are-the-feature-families-complementary-or-redundant)
+  now confirms quantitatively that all seven in-dataset families are mutually redundant.
+  So the priority is the two **untapped data sources** that might carry orthogonal signal:
+  **market** (de-vigged moneyline-implied probabilities — ≈ a `keep_odds=True` reassembly,
+  the `schedule` collector already supports it) and **Next Gen Stats** (needs the `_diff`
+  leakage fix and team-week aggregation below before it can join as a family), rather than
+  more box/pbp features.
 - Calibration pass on the run-10 / run-14 BART models (best AUROC/Brier but 0.5-threshold
   accuracy lags — calibration may recover it) and Next Gen Stats integration at the
   weekly grain.
