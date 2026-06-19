@@ -24,3 +24,40 @@ class TestGetMaddenData(unittest.TestCase):
         # every feature column carries the 'madden' token (partition.py contract)
         feat = [c for c in out.columns if c not in ('team', 'season', 'week')]
         self.assertTrue(all('madden' in c for c in feat))
+
+    def test_prev_season_diff_two_seasons(self):
+        def _make_players(season, overall):
+            return pd.DataFrame([{
+                'season': season, 'full_name': 'QB1', 'team': 'KC',
+                'position': 'QB', 'overall': overall, 'weight': 220,
+                'power_moves': 0, 'finesse_moves': 0,
+                'gsis_id': 'QB1', 'role': 'qb', 'side': 'none',
+            }])
+
+        def _player_season_side_effect(season):
+            if season == 2023:
+                return _make_players(2023, 90)
+            if season == 2024:
+                return _make_players(2024, 96)
+            raise ValueError(f"Unexpected season: {season}")
+
+        starters = pd.DataFrame([
+            {'season': 2023, 'week': 1, 'team': 'KC', 'gsis_id': 'QB1', 'position': 'QB'},
+            {'season': 2024, 'week': 1, 'team': 'KC', 'gsis_id': 'QB1', 'position': 'QB'},
+        ])
+
+        with mock.patch.object(collect, '_player_season',
+                               side_effect=_player_season_side_effect), \
+             mock.patch.object(collect.starters_mod, 'get_weekly_starters',
+                               return_value=starters):
+            out = collect.get_madden_data([2023, 2024])
+
+        row_2023 = out[(out['season'] == 2023) & (out['team'] == 'KC')].iloc[0]
+        row_2024 = out[(out['season'] == 2024) & (out['team'] == 'KC')].iloc[0]
+
+        self.assertEqual(row_2023['madden_qb_ovr'], 90)
+        self.assertEqual(row_2024['madden_qb_ovr'], 96)
+        self.assertTrue(pd.isna(row_2023['madden_qb_ovr_diff_prev_season']),
+                        "2023 row should have NaN diff (no 2022 season loaded)")
+        self.assertEqual(row_2024['madden_qb_ovr_diff_prev_season'], 6,
+                         "2024 diff should be 96 - 90 = 6")
