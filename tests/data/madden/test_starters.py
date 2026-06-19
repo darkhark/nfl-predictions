@@ -43,8 +43,9 @@ class TestGetWeeklyStartersResilience(unittest.TestCase):
 
     _EXPECTED_COLS = ['season', 'week', 'team', 'gsis_id', 'position']
 
-    def test_returns_empty_when_import_injuries_raises(self):
-        """Pre-2009 seasons: import_injuries raises ValueError; result is empty."""
+    def test_proceeds_with_healthy_starters_when_injuries_unavailable(self):
+        """Pre-2009 seasons: import_injuries raises ValueError; injuries fall back to
+        empty (all players treated as healthy) and valid starters are still returned."""
         good_depth = pd.DataFrame([{
             'game_type': 'REG', 'club_code': 'KC', 'season': 2008, 'week': 1,
             'gsis_id': 'G1', 'position': 'QB', 'depth_team': '1',
@@ -53,8 +54,10 @@ class TestGetWeeklyStartersResilience(unittest.TestCase):
              mock.patch.object(nfl, 'import_injuries',
                                side_effect=ValueError('Data not available before 2009.')):
             out = starters.get_weekly_starters([2008])
-        # Should still produce starters (injuries fall back to empty; all healthy)
+        # Depth charts are valid so starters should be returned (non-empty)
         self.assertListEqual(list(out.columns), self._EXPECTED_COLS)
+        self.assertFalse(out.empty)
+        self.assertIn('G1', out['gsis_id'].values)
 
     def test_returns_empty_when_depth_chart_raises(self):
         """If import_depth_charts itself raises, an empty frame with correct columns is returned."""

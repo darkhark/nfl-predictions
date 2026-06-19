@@ -139,7 +139,7 @@ def main():
     print(f'\n=== SUMMARY ===')
     print(f'Brier:   all={brier_all_mean:.4f}  no-madden={brier_no_madden_mean:.4f}  '
           f'delta={brier_delta_mean:+.4f}  '
-          f'(negative=madden hurts, positive=madden helps [lower Brier is better])')
+          f'(negative=madden helps, positive=madden hurts [lower Brier is better])')
     print(f'ROC-AUC: all={roc_all_mean:.4f}  no-madden={roc_no_madden_mean:.4f}  '
           f'delta={roc_delta_mean:+.4f}  '
           f'(positive=madden helps, negative=madden hurts [higher AUROC is better])')
