@@ -14,93 +14,93 @@
       "test_season": 2019,
       "n_train": 7136,
       "n_test": 512,
-      "brier_all": 0.229527,
+      "brier_all": 0.22804,
       "brier_no_madden": 0.230737,
-      "brier_delta": -0.00121,
-      "roc_auc_all": 0.660156,
+      "brier_delta": -0.002697,
+      "roc_auc_all": 0.666718,
       "roc_auc_no_madden": 0.653885,
-      "roc_auc_delta": 0.006271
+      "roc_auc_delta": 0.012833
     },
     {
       "fold": 2,
       "test_season": 2020,
       "n_train": 7644,
       "n_test": 512,
-      "brier_all": 0.21794,
+      "brier_all": 0.219141,
       "brier_no_madden": 0.223248,
-      "brier_delta": -0.005308,
-      "roc_auc_all": 0.709473,
+      "brier_delta": -0.004107,
+      "roc_auc_all": 0.705643,
       "roc_auc_no_madden": 0.694702,
-      "roc_auc_delta": 0.014771
+      "roc_auc_delta": 0.010941
     },
     {
       "fold": 3,
       "test_season": 2021,
       "n_train": 8156,
       "n_test": 544,
-      "brier_all": 0.236361,
+      "brier_all": 0.242103,
       "brier_no_madden": 0.237985,
-      "brier_delta": -0.001623,
-      "roc_auc_all": 0.642031,
+      "brier_delta": 0.004118,
+      "roc_auc_all": 0.624595,
       "roc_auc_no_madden": 0.633299,
-      "roc_auc_delta": 0.008732
+      "roc_auc_delta": -0.008705
     },
     {
       "fold": 4,
       "test_season": 2022,
       "n_train": 8668,
       "n_test": 542,
-      "brier_all": 0.224081,
+      "brier_all": 0.2279,
       "brier_no_madden": 0.229847,
-      "brier_delta": -0.005766,
-      "roc_auc_all": 0.682167,
+      "brier_delta": -0.001948,
+      "roc_auc_all": 0.669667,
       "roc_auc_no_madden": 0.660789,
-      "roc_auc_delta": 0.021378
+      "roc_auc_delta": 0.008878
     },
     {
       "fold": 5,
       "test_season": 2023,
       "n_train": 9180,
       "n_test": 544,
-      "brier_all": 0.233105,
+      "brier_all": 0.235638,
       "brier_no_madden": 0.238175,
-      "brier_delta": -0.00507,
-      "roc_auc_all": 0.648748,
+      "brier_delta": -0.002537,
+      "roc_auc_all": 0.637935,
       "roc_auc_no_madden": 0.624892,
-      "roc_auc_delta": 0.023857
+      "roc_auc_delta": 0.013043
     },
     {
       "fold": 6,
       "test_season": 2024,
       "n_train": 9724,
       "n_test": 544,
-      "brier_all": 0.21432,
+      "brier_all": 0.215892,
       "brier_no_madden": 0.219922,
-      "brier_delta": -0.005601,
-      "roc_auc_all": 0.72367,
+      "brier_delta": -0.004029,
+      "roc_auc_all": 0.721237,
       "roc_auc_no_madden": 0.705882,
-      "roc_auc_delta": 0.017788
+      "roc_auc_delta": 0.015355
     },
     {
       "fold": 7,
       "test_season": 2025,
       "n_train": 10266,
       "n_test": 544,
-      "brier_all": 0.229847,
+      "brier_all": 0.229102,
       "brier_no_madden": 0.229156,
-      "brier_delta": 0.000691,
-      "roc_auc_all": 0.655912,
+      "brier_delta": -5.4e-05,
+      "roc_auc_all": 0.659007,
       "roc_auc_no_madden": 0.658683,
-      "roc_auc_delta": -0.002771
+      "roc_auc_delta": 0.000324
     }
   ],
   "summary": {
-    "brier_all_mean": 0.226454,
+    "brier_all_mean": 0.228259,
     "brier_no_madden_mean": 0.229867,
-    "brier_delta_mean": -0.003412,
-    "roc_auc_all_mean": 0.674594,
+    "brier_delta_mean": -0.001608,
+    "roc_auc_all_mean": 0.669257,
     "roc_auc_no_madden_mean": 0.661733,
-    "roc_auc_delta_mean": 0.012861
+    "roc_auc_delta_mean": 0.007524
   },
-  "elapsed_s": 143.3
+  "elapsed_s": 172.1
 }
