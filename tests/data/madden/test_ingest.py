@@ -65,3 +65,38 @@ class TestPositionQualityFlag(unittest.TestCase):
         out = ingest.normalize_madden_frame(df, 2025)
         self.assertEqual(out.iloc[0]['position'], 'False')
         self.assertEqual(out.iloc[0]['overall'], 99)
+
+
+# append to tests/data/madden/test_ingest.py
+from src.data.madden import ids as madden_ids
+from src.data.madden import roles as madden_roles
+
+
+class TestLiveSeasonContract(unittest.TestCase):
+    """Live network test (2023). Verifies the Plan 1 output contract end-to-end."""
+    @classmethod
+    def setUpClass(cls):
+        df = ingest.load_madden_season(2023)
+        df = madden_ids.attach_gsis_id(df, 2023)
+        cls.df = madden_roles.classify_roles(df)
+
+    def test_has_contract_columns(self):
+        for col in ['season', 'full_name', 'team', 'position', 'overall', 'weight',
+                    'power_moves', 'finesse_moves', 'gsis_id', 'role', 'side']:
+            self.assertIn(col, self.df.columns)
+
+    def test_overall_complete_and_plausible(self):
+        self.assertEqual(self.df['overall'].isna().sum(), 0)
+        self.assertTrue(self.df['overall'].between(20, 99).all())
+
+    def test_majority_of_players_get_gsis_id(self):
+        match_rate = self.df['gsis_id'].notna().mean()
+        self.assertGreater(match_rate, 0.85)
+
+    def test_every_player_classified(self):
+        self.assertEqual((self.df['role'] == 'unknown').sum(), 0)
+
+    def test_known_edge_classified_as_edge(self):
+        mack = self.df[self.df['full_name'] == 'Khalil Mack']
+        self.assertFalse(mack.empty)
+        self.assertEqual(mack.iloc[0]['role'], 'edge')

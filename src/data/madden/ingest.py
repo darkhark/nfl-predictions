@@ -61,9 +61,9 @@ def normalize_madden_frame(df, season):
         out['team'] = df['team'].map(NICKNAME_TO_ABBR).fillna(df['team'])
         colmap = NESTED_COLUMN_MAP
     else:
-        name_col = _resolve_column(df, ['Name', 'full_name'])
+        name_col = _resolve_column(df, ['Name', 'Full Name', 'full_name'])
         out['full_name'] = df[name_col].astype(str).str.strip()
-        out['team'] = df['Team']
+        out['team'] = df['Team'].map(NICKNAME_TO_ABBR).fillna(df['Team'])
         colmap = CLASSIC_COLUMN_MAP
     for src_col, dst_col in colmap.items():
         if src_col in df.columns and dst_col not in out.columns:
