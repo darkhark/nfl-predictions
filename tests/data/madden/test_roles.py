@@ -16,6 +16,7 @@ class TestAssignRole(unittest.TestCase):
     def test_light_de_is_edge_heavy_de_is_interior(self):
         self.assertEqual(roles.assign_role('LE', 270, 80, 85), 'edge')
         self.assertEqual(roles.assign_role('RE', 295, 70, 60), 'interior_dl')
+        self.assertEqual(roles.assign_role('LE', 280, 80, 85), 'edge')
 
     def test_dt_and_mlb_unambiguous(self):
         self.assertEqual(roles.assign_role('DT', 310, 70, 40), 'interior_dl')
@@ -39,6 +40,7 @@ class TestAssignSide(unittest.TestCase):
         self.assertEqual(roles.assign_side('LE'), 'left')
         self.assertEqual(roles.assign_side('REDGE'), 'right')
         self.assertEqual(roles.assign_side('DT'), 'none')
+        self.assertEqual(roles.assign_side('LS'), 'none')
 
 
 class TestClassifyRoles(unittest.TestCase):

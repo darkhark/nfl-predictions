@@ -27,6 +27,7 @@ POSITION_TO_ROLE = {
 }
 _OLB_LABELS = {'LOLB', 'ROLB', 'OLB'}
 _DE_LABELS = {'LE', 'RE', 'DE'}
+_NO_SIDE = {'LS'}
 
 
 def _num(value):
@@ -49,6 +50,8 @@ def assign_role(position, weight, power_moves, finesse_moves):
 
 def assign_side(position):
     p = str(position)
+    if p in _NO_SIDE:
+        return 'none'
     if p.startswith('L'):
         return 'left'
     if p.startswith('R'):
