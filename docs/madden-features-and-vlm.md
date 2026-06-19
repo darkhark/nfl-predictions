@@ -28,10 +28,15 @@ shift, because Madden ratings are pre-game-known season constants — see leakag
 
 | Suffix | Meaning | Computation |
 |---|---|---|
-| `_ovr` | the slot/group's Madden overall this game | overall of the starter (slot) or mean overall of the role's starters (group) |
-| `_ovr_diff_prev` | change vs the team's **previous game** | `_ovr` − the same slot's `_ovr` one game earlier (by games played, skipping byes) |
-| `_ovr_diff_4g` | change vs **4 games** earlier | `_ovr` − the same slot's `_ovr` 4 games earlier |
-| `_ovr_diff_prev_season` | change vs **last season's** launch value | `_ovr` − the same player's prior-season launch overall |
+| `_ovr` | the slot/group's talent this game, **z-scored within season** | starter overall (slot) or mean overall of the role's starters (group), then `(x − season_mean) / season_std` over that season — removes cross-era scale drift, preserves relative magnitude. Unit = standard deviations. |
+| `_ovr_diff_prev` | change vs the team's **previous game**, in **raw overall points** | raw overall − the same slot's raw overall one game earlier (by games played, skipping byes) |
+| `_ovr_diff_4g` | change vs **4 games** earlier, in **raw overall points** | raw overall − the same slot's raw overall 4 games earlier |
+| `_ovr_diff_prev_season` | change vs **last season's** launch value, in **raw overall points** | raw overall − the same player's prior-season launch overall |
+
+> **Note on units:** the `_ovr` *level* is a within-season **z-score**; the three `_diff_*`
+> columns are **raw overall points** (computed from the raw overalls *before* normalization,
+> because differences are already era-invariant and "lost 14 overall" is more interpretable
+> than a z-shift). Matchup deltas (below) are differences of the z-scored levels.
 
 Diffs are driven mostly by **starter changes** (injury/trade/benching) since launch
 overalls are constant within a season; `_diff_prev_season` captures a player's
@@ -89,14 +94,16 @@ off-ball-LB by weight + power/finesse moves), so they're scheme/era-invariant.
 
 ### 2d. Worked example — `KC @ BAL`, 2024 Week 1, target = KC
 
+Levels are z-scores (SDs above/below the 2024 league mean for that slot); diffs are raw points.
+
 | Column | Value | Reading |
 |---|---|---|
-| `target_madden_qb_ovr` | 99.0 | Mahomes |
-| `target_madden_edge_left_ovr` | 81.0 | KC's left edge |
-| `target_madden_exterior_ol_ovr` | 73.0 | KC tackles (mean) |
-| `opp_madden_edge_ovr` | 80.0 | BAL edge group |
-| `madden_matchup_pass_pro` | −7.0 | 73 − 80: KC tackles slightly outclassed by BAL edge |
-| `target_madden_qb_ovr_diff_prev_season` | 0.0 | Mahomes 99 in both Madden 25 and 26 |
+| `target_madden_qb_ovr` | **+2.28** | Mahomes — 2.28 SD above the league's starting QBs (raw 99) |
+| `target_madden_edge_left_ovr` | +0.20 | KC's left edge, slightly above average |
+| `target_madden_exterior_ol_ovr` | −0.80 | KC tackles, below average |
+| `opp_madden_edge_ovr` | +0.02 | BAL edge group, ~average |
+| `madden_matchup_pass_pro` | −0.82 | KC tackles (−0.80) − BAL edge (+0.02): KC tackles outclassed |
+| `target_madden_qb_ovr_diff_prev_season` | 0.0 | raw points — Mahomes 99 in both Madden 25 and 26 |
 
 ---
 
@@ -114,15 +121,18 @@ Baselines below are the observed values in the current dataset.
   (XGBoost rejects them) — guarded by `features._safe` returning float64 NaN.
 
 ### 3b. Value ranges (per cell)
-| Measure | Observed [min, p1 … p99, max] | WARN if outside | FAIL if outside |
-|---|---|---|---|
-| `_ovr` | [28, 58 … 98, 99] | [25, 99] | [0, 99] |
-| `_ovr_diff_prev` | [−66, −21 … 20, 66] | [−70, 70] | [−99, 99] |
-| `_ovr_diff_4g` | [−58, −23 … 21, 66] | [−70, 70] | [−99, 99] |
-| `_ovr_diff_prev_season` | [−58, −27 … 25, 52] | [−70, 70] | [−99, 99] |
-| `madden_matchup_*` | [−40.5, −25 … 24, 44.5] | [−60, 60] | [−99, 99] |
+Levels are now within-season z-scores (≈ N(0,1)); diffs remain raw overall points.
 
-An overall > 99 or < 0, or |diff| > 99, indicates a parsing/join bug, not real data.
+| Measure | Unit | Observed [min, p1 … p99, max] | WARN if outside | FAIL if outside |
+|---|---|---|---|---|
+| `_ovr` | z-score | [−5.69, −2.3 … 2.2, 4.19] | [−5, 5] | [−10, 10] |
+| `_ovr_diff_prev` | raw pts | [−66, −21 … 20, 66] | [−70, 70] | [−99, 99] |
+| `_ovr_diff_4g` | raw pts | [−58, −23 … 21, 66] | [−70, 70] | [−99, 99] |
+| `_ovr_diff_prev_season` | raw pts | [−58, −27 … 25, 52] | [−70, 70] | [−99, 99] |
+| `madden_matchup_*` | z diff | [−5.78, −3.2 … 3.1, 5.79] | [−8, 8] | [−12, 12] |
+
+A `_ovr` z beyond ±10 (or a per-season mean far from 0 / std far from 1) signals a
+normalization or parse bug; a raw-point |diff| > 99 is impossible real data.
 
 ### 3c. Coverage / missingness (per season, on `_ovr` columns)
 NaN is **allowed** at the cell level (a game with an unmatched backup → XGBoost routes the
@@ -134,13 +144,17 @@ NaN). The gate is at the season level:
   schema — missing `game_type`/`club_code`/`depth_team`; `get_weekly_starters` skips it).
   This is the documented open follow-up; until fixed, 2025 contributes ~0 Madden signal.
 
-### 3d. Distribution drift (per season, league-mean `_ovr`)
-- **Baseline:** league-mean overall ranges **75.6 (2020) → 85.4 (2008)**. There is a real
-  **era drift** — EA recalibrated the scale: ~84 in 2004–2008 vs ~77 in recent years.
-  Overalls are therefore **not perfectly comparable across eras**; the within-season and
-  YoY diffs are more era-robust than the raw level.
-- **WARN** if a season's league-mean `_ovr` is outside **[73, 87]** or is **NaN**.
-- 2025 is NaN here → consistent with the §3c coverage failure.
+### 3d. Distribution drift
+The raw overalls have a real **era drift** — EA recalibrated the scale (league-mean ≈ 84 in
+2004–08 vs ≈ 77 recently). The `_ovr` levels are now **z-scored within season**, which
+removes that drift by construction; the A/B ablation confirms this helps (Madden lift
++0.0075 raw → **+0.0129** z-scored). Two checks remain:
+- **Post-normalization invariant (FAIL):** each season's `_ovr` columns should have mean ≈ 0
+  and std ≈ 1 (within float tolerance). A season far off means normalization didn't run or
+  the season has too few teams.
+- **Pre-normalization source health (WARN):** on the *raw* overalls (before z-scoring), a
+  season's league-mean far outside **[73, 87]** or **NaN** signals a data-source change.
+  2025 is NaN/empty here → consistent with the §3c coverage failure.
 
 ### 3e. Signal quality (upstream)
 - Per-season **gsis match rate ≥ 0.85** (the Plan-1 bridge gate; 2023 measured 0.9341).

@@ -189,6 +189,7 @@ metrics are tracked:
 | 23 | 2026-06-17 | **Recency** (EWMA halflife 3 + rolling 4, every cumulative-average stat), rank-only, XGBoost | 36 | 0.693 | 0.627 | 0.2321 |
 | 24 | 2026-06-17 | **BART** on the recency rank-only pool | 58 | 0.691 | 0.633 | 0.2223 |
 | 25 | 2026-06-18 | **Madden ratings** (player overall ratings injected as team-week features), rank-only, base-vs-madden ablation (all groups vs all − madden) | 6160→6348 | +0.0075 delta | — | −0.0016 delta |
+| 26 | 2026-06-19 | **Madden ratings, `_ovr` z-scored within season** (removes cross-era ratings drift; diffs kept raw-point), same base-vs-madden ablation | 6160→6348 | **+0.0129 delta** | — | **−0.0034 delta** |
 
 **What changed between runs**
 
@@ -470,6 +471,20 @@ metrics are tracked:
   > Repro: `conda run -n nfl-predictions python scripts/experiments/madden_ablation.py`
   > on the `madden-ratings-features` branch; artifacts in
   > `data/predict_games/group_ablation/madden_ablation.json`.
+
+- **Run 26 (Madden ratings, `_ovr` z-scored within season, 2026-06-19):** the raw Madden
+  overalls carry a real **cross-era scale drift** (league-mean overall ≈ 84 in 2004–08 vs
+  ≈ 77 recently), so the absolute level means different things across eras while the model
+  trains across all of them. Fix: z-score each `_ovr` *level* within season (mean 0, std 1);
+  the `_diff_*` columns are left as raw overall points (differences are already era-invariant).
+  **Same targeted ablation:** ROC-AUC delta **+0.0075 → +0.0129** (Madden lift +72%), Brier
+  delta **−0.0016 → −0.0034** (≈2×); still 6/7 folds positive, and **2021 flipped from
+  hurting (−0.0087) to helping (+0.0087)**. The only non-helping fold is 2025 (no Madden
+  starter data — nflverse depth-chart schema change). Removing the era drift roughly doubled
+  the signal — strong evidence the level non-stationarity, not the talent signal, was the
+  limiter. Same untuned-scorer caveat as Run 25 applies.
+  > Both results on disk: `madden_ablation_raw.json` (Run 25) and
+  > `madden_ablation_zscore.json` (Run 26) under `data/predict_games/group_ablation/`.
 
 ## Feature-group ablation: are the feature families complementary or redundant?
 
