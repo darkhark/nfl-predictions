@@ -37,5 +37,29 @@ class TestBuildTeamWeekOveralls(unittest.TestCase):
         self.assertEqual(row['madden_exterior_ol_ovr'], (90 + 78) / 2)
 
 
+class TestWithinSeasonDiffs(unittest.TestCase):
+    def test_prev_and_4g_diffs(self):
+        df = pd.DataFrame([
+            {'season': 2023, 'week': w, 'team': 'KC', 'madden_qb_ovr': ovr}
+            for w, ovr in [(1, 96), (2, 96), (3, 70), (4, 70), (5, 96)]
+        ])
+        out = features.add_within_season_diffs(df).sort_values('week')
+        diffs = out['madden_qb_ovr_diff_prev'].tolist()
+        self.assertTrue(pd.isna(diffs[0]))            # first game -> NA
+        self.assertEqual(diffs[2], -26)               # 70 - 96 (starter went down)
+        self.assertEqual(diffs[4], 26)                # 96 - 70 (starter returned)
+        fourg = out['madden_qb_ovr_diff_4g'].tolist()
+        self.assertTrue(pd.isna(fourg[3]))            # game 4 -> still NA
+        self.assertEqual(fourg[4], 0)                 # week5 96 vs week1 96
+
+
+class TestPrevSeasonDiff(unittest.TestCase):
+    def test_prev_season_diff(self):
+        cur = pd.DataFrame([{'season': 2024, 'week': 1, 'team': 'KC', 'madden_qb_ovr': 99}])
+        prev = pd.DataFrame([{'season': 2023, 'week': 1, 'team': 'KC', 'madden_qb_ovr': 96}])
+        out = features.add_prev_season_diff(cur, prev)
+        self.assertEqual(out.iloc[0]['madden_qb_ovr_diff_prev_season'], 3)
+
+
 if __name__ == '__main__':
     unittest.main()

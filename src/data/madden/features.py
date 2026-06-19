@@ -61,3 +61,28 @@ def build_team_week_overalls(starters, players):
                 rec[f'madden_{group}_ovr'] = members['overall'].mean()
         records.append(rec)
     return pd.DataFrame(records)
+
+
+def _ovr_columns(df):
+    return [c for c in df.columns if c.startswith('madden_') and c.endswith('_ovr')]
+
+
+def add_within_season_diffs(df):
+    out = df.sort_values(['team', 'season', 'week']).copy()
+    grp = out.groupby(['team', 'season'])
+    for col in _ovr_columns(out):
+        out[f'{col}_diff_prev'] = out[col] - grp[col].shift(1)
+        out[f'{col}_diff_4g'] = out[col] - grp[col].shift(4)
+    return out
+
+
+def add_prev_season_diff(df, prev):
+    """Per-team season-over-season launch diff. `prev` is the prior season frame;
+    a team's value is constant within a season, so any prior-season row suffices."""
+    out = df.copy()
+    ovr_cols = _ovr_columns(out)
+    prev_by_team = (prev.sort_values('week').groupby('team')[ovr_cols].first())
+    for col in ovr_cols:
+        mapped = out['team'].map(prev_by_team[col])
+        out[f'{col}_diff_prev_season'] = out[col] - mapped
+    return out
