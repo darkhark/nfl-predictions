@@ -186,7 +186,7 @@ class TestLiveStarters(unittest.TestCase):
         cls.df = starters.get_weekly_starters([2023])
 
     def test_one_qb_per_team_week(self):
-        qbs = cls = self.df[self.df['position'] == 'QB']
+        qbs = self.df[self.df['position'] == 'QB']
         counts = qbs.groupby(['team', 'week']).size()
         self.assertTrue((counts == 1).all())
 
