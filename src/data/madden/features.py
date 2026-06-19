@@ -1,5 +1,6 @@
 """Build team-week Madden overall columns from weekly starters + the player-season
 table, then within-season / season-over-season diffs and post-reframe matchup deltas."""
+import numpy as np
 import pandas as pd
 
 # granular single-player slots keyed by (madden_position predicate)
@@ -78,12 +79,20 @@ def add_within_season_diffs(df):
 
 def add_prev_season_diff(df, prev):
     """Per-team season-over-season launch diff. `prev` is the prior season frame;
-    a team's value is constant within a season, so any prior-season row suffices."""
+    a team's value is constant within a season, so any prior-season row suffices.
+
+    Columns present in `df` but absent in `prev` produce NaN diffs (not an error)."""
     out = df.copy()
     ovr_cols = _ovr_columns(out)
-    prev_by_team = (prev.sort_values('week').groupby('team')[ovr_cols].first())
+    shared_cols = [c for c in ovr_cols if c in prev.columns]
+    if not shared_cols:
+        return out
+    prev_by_team = (prev.sort_values('week').groupby('team')[shared_cols].first())
     for col in ovr_cols:
-        mapped = out['team'].map(prev_by_team[col])
+        if col in shared_cols:
+            mapped = out['team'].map(prev_by_team[col])
+        else:
+            mapped = np.nan
         out[f'{col}_diff_prev_season'] = out[col] - mapped
     return out
 

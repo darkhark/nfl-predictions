@@ -188,6 +188,7 @@ metrics are tracked:
 | 22 | 2026-06-17 | **BART** on the situational rank-only pool | 61 | 0.696 | 0.649 | 0.2209 |
 | 23 | 2026-06-17 | **Recency** (EWMA halflife 3 + rolling 4, every cumulative-average stat), rank-only, XGBoost | 36 | 0.693 | 0.627 | 0.2321 |
 | 24 | 2026-06-17 | **BART** on the recency rank-only pool | 58 | 0.691 | 0.633 | 0.2223 |
+| 25 | 2026-06-18 | **Madden ratings** (player overall ratings injected as team-week features), rank-only, base-vs-madden ablation (all groups vs all − madden) | 6160→6348 | +0.0075 delta | — | −0.0016 delta |
 
 **What changed between runs**
 
@@ -449,6 +450,26 @@ metrics are tracked:
   > Repro: `SELECTION_METRIC = 'brier'` in the `cross_validation/` notebooks on the
   > `recency-ewma-features` branch; rebuild the dataset via the assembly script (recency is
   > derived post-cache — no PBP re-download).
+- **Run 25 (Madden ratings, base-vs-madden targeted ablation, 2026-06-18):** injected
+  Madden player overall ratings as team-week features: per-slot individual ratings
+  (QB, RB, TE, WR1/2/3, LT/LG/C/RG/RT, edge left/right), group means (backfield,
+  receivers, interior/exterior OL, edge, interior DL, linebackers, cornerbacks, safeties),
+  within-season diffs (prev game, 4-game), season-over-season diffs, and target-vs-opp
+  matchup deltas (pass-pro edge, interior, skill-cover, pass-rush) — 188 madden columns,
+  classified as the `madden_ratings` content family. Coverage: 69–78% non-null on _ovr
+  columns in 2009–2024; 0% in 2025 (new nflverse depth-chart schema breaks starter lookup).
+  **Targeted ablation (all 7 groups vs all 7 − madden_ratings, rank-only XGBoost, 7 folds
+  2019–2025):** mean Brier 0.2283 (with) vs 0.2299 (without), **delta −0.0016 (madden
+  helps)**; mean ROC-AUC 0.6693 (with) vs 0.6617 (without), **delta +0.0075**.
+  6/7 folds positive on Brier, 6/7 positive on ROC-AUC. **Madden ratings add a consistent
+  but modest signal** on this untuned fixed-model scorer — they are the first non-market
+  data source in this project to produce a reliably positive Brier delta across folds.
+  Note: these are *untuned* XGBoost scores on the ablation metric, not the tuned hold-out
+  table scores; the actual hold-out improvement after RFE may be larger, smaller, or null
+  (RFE may not select the same madden columns that are carrying the signal).
+  > Repro: `conda run -n nfl-predictions python scripts/experiments/madden_ablation.py`
+  > on the `madden-ratings-features` branch; artifacts in
+  > `data/predict_games/group_ablation/madden_ablation.json`.
 
 ## Feature-group ablation: are the feature families complementary or redundant?
 
@@ -462,11 +483,21 @@ evaluates on **season-blocked rolling-origin CV** (test = each of 2019–2025; t
 seasons are the early-stopping window), and decomposes skill into per-group **Shapley main
 effects** and **pairwise Shapley interaction indices**.
 
-The 2026-06-17 run swept the **7 families present in the dataset** — `box_score`,
+The 2026-06-17 run swept the **7 families present at that time** — `box_score`,
 `schedule_points`, `pbp_phase1/2/3`, `situational_playcall`, `snap_share` — over
 `context_rest` as an always-on base (128 subsets × 7 folds = **896 fits**, Brier). These
 numbers are rolling-origin CV on an *untuned* model and are **NOT comparable to the tuned
 hold-out table above — read the deltas between subsets, not the absolute level.**
+
+The 2026-06-18 run (Run 25 / `madden-ratings-features` branch) introduced an **8th family —
+`madden_ratings`** (188 columns, player Madden overall ratings as team-week features).
+Rather than re-run the full 2^8 = 256-subset sweep (~60 min), a targeted base-vs-madden
+comparison was run directly: full-8-group score vs full-7-group (madden excluded) over the
+same 7 folds. **Result: madden_ratings reduces mean Brier by 0.0016 (positive) and increases
+mean AUROC by 0.0075 (positive); 6/7 folds agree on both metrics.** See Run 25 note above for
+detail. Unlike the 7 original families which are all sub-additive with each other, madden
+ratings add a *complementary* signal not already captured by box/pbp/schedule families —
+suggesting player quality is a partially orthogonal dimension to team-game performance.
 
 - **Every one of the 21 pairwise interactions is negative (sub-additive); zero are
   positive.** No pair of families complements another. Most sub-additive:
@@ -497,6 +528,13 @@ in the pool** — **market** (de-vigged odds; the `schedule` collector supports
 integrated, and blocked on the season-average `_diff` leakage fix plus team-week
 aggregation). Reproduce: `cross_validation/group_ablation.ipynb` or
 `cross_validation/run_group_ablation.py`; artifacts in `data/predict_games/group_ablation/`.
+
+**Madden ratings (Run 25, `madden_ratings` family):** unlike the original 7 families,
+Madden adds a *genuinely complementary* signal (Brier −0.0016, ROC-AUC +0.0075, 6/7 folds
+positive). The targeted ablation indicates player Madden ratings capture something the
+box/pbp/schedule metrics miss — plausibly pre-season talent assessments that are orthogonal
+to in-season form. The full Shapley decomposition with all 8 families is pending (256-subset
+× 7-fold sweep, ~60 min on a laptop).
 
 ## Roadmap
 

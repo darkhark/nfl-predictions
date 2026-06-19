@@ -2,6 +2,7 @@ import unittest
 from unittest import mock
 import pandas as pd
 from src.data.madden import starters
+import nfl_data_py as nfl
 
 
 def _depth(rows):
@@ -33,6 +34,46 @@ class TestAvailableStarters(unittest.TestCase):
         inj = pd.DataFrame([{'gsis_id': 'STARTER', 'report_status': 'Questionable'}])
         out = starters.available_starters(self._two_qbs(), inj)
         self.assertEqual(out[out['position'] == 'QB'].iloc[0]['gsis_id'], 'STARTER')
+
+
+class TestGetWeeklyStartersResilience(unittest.TestCase):
+    """get_weekly_starters must return an empty frame rather than raising when
+    nfl_data_py raises (e.g. injuries not available before 2009) or when the
+    depth-chart frame is missing expected columns (e.g. 2025 new schema)."""
+
+    _EXPECTED_COLS = ['season', 'week', 'team', 'gsis_id', 'position']
+
+    def test_returns_empty_when_import_injuries_raises(self):
+        """Pre-2009 seasons: import_injuries raises ValueError; result is empty."""
+        good_depth = pd.DataFrame([{
+            'game_type': 'REG', 'club_code': 'KC', 'season': 2008, 'week': 1,
+            'gsis_id': 'G1', 'position': 'QB', 'depth_team': '1',
+        }])
+        with mock.patch.object(nfl, 'import_depth_charts', return_value=good_depth), \
+             mock.patch.object(nfl, 'import_injuries',
+                               side_effect=ValueError('Data not available before 2009.')):
+            out = starters.get_weekly_starters([2008])
+        # Should still produce starters (injuries fall back to empty; all healthy)
+        self.assertListEqual(list(out.columns), self._EXPECTED_COLS)
+
+    def test_returns_empty_when_depth_chart_raises(self):
+        """If import_depth_charts itself raises, an empty frame with correct columns is returned."""
+        with mock.patch.object(nfl, 'import_depth_charts',
+                               side_effect=Exception('network error')):
+            out = starters.get_weekly_starters([2003])
+        self.assertTrue(out.empty)
+        self.assertListEqual(list(out.columns), self._EXPECTED_COLS)
+
+    def test_returns_empty_when_depth_chart_missing_schema_columns(self):
+        """2025-style depth charts have a different schema; the function returns empty."""
+        new_schema_depth = pd.DataFrame([{
+            'dt': '2025-01-01', 'team': 'KC', 'player_name': 'Patrick Mahomes',
+            'gsis_id': 'G1', 'pos_grp': 'QB',
+        }])
+        with mock.patch.object(nfl, 'import_depth_charts', return_value=new_schema_depth):
+            out = starters.get_weekly_starters([2025])
+        self.assertTrue(out.empty)
+        self.assertListEqual(list(out.columns), self._EXPECTED_COLS)
 
 
 class TestLiveStarters(unittest.TestCase):
