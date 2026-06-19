@@ -20,7 +20,8 @@ class TestGetMaddenData(unittest.TestCase):
         self.assertEqual(set(['team', 'season', 'week']).issubset(out.columns), True)
         self.assertIn('madden_qb_ovr', out.columns)
         self.assertIn('madden_qb_ovr_diff_prev', out.columns)
-        self.assertEqual(out.iloc[0]['madden_qb_ovr'], 96)
+        # single team in synthetic fixture → within-season std is NaN → z-score = 0.0
+        self.assertEqual(out.iloc[0]['madden_qb_ovr'], 0.0)
         # every feature column carries the 'madden' token (partition.py contract)
         feat = [c for c in out.columns if c not in ('team', 'season', 'week')]
         self.assertTrue(all('madden' in c for c in feat))
@@ -55,8 +56,9 @@ class TestGetMaddenData(unittest.TestCase):
         row_2023 = out[(out['season'] == 2023) & (out['team'] == 'KC')].iloc[0]
         row_2024 = out[(out['season'] == 2024) & (out['team'] == 'KC')].iloc[0]
 
-        self.assertEqual(row_2023['madden_qb_ovr'], 90)
-        self.assertEqual(row_2024['madden_qb_ovr'], 96)
+        # single team per season → within-season std is NaN → z-score = 0.0
+        self.assertEqual(row_2023['madden_qb_ovr'], 0.0)
+        self.assertEqual(row_2024['madden_qb_ovr'], 0.0)
         self.assertTrue(pd.isna(row_2023['madden_qb_ovr_diff_prev_season']),
                         "2023 row should have NaN diff (no 2022 season loaded)")
         self.assertEqual(row_2024['madden_qb_ovr_diff_prev_season'], 6,

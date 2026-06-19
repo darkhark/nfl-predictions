@@ -58,4 +58,6 @@ def get_madden_data(years):
         per_season.append(overalls)
     if not per_season:
         return pd.DataFrame(columns=['team', 'season', 'week'])
-    return pd.concat(per_season, ignore_index=True)
+    result = pd.concat(per_season, ignore_index=True)
+    result = features.zscore_overalls_within_season(result)
+    return result

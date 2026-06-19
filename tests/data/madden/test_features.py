@@ -100,5 +100,69 @@ class TestMatchupColumnsNoCoverage(unittest.TestCase):
             self.assertTrue(out[col].isna().all(), msg=f'{col} should be all NaN')
 
 
+class TestZscoreOverallsWithinSeason(unittest.TestCase):
+    def test_hand_verified_zscore_three_teams(self):
+        """QB overalls 99/80/61 → mean=80, std=19 → z = +1.0/0.0/−1.0."""
+        df = pd.DataFrame([
+            {'season': 2023, 'week': 1, 'team': 'A', 'madden_qb_ovr': 99.0},
+            {'season': 2023, 'week': 1, 'team': 'B', 'madden_qb_ovr': 80.0},
+            {'season': 2023, 'week': 1, 'team': 'C', 'madden_qb_ovr': 61.0},
+        ])
+        out = features.zscore_overalls_within_season(df)
+        zs = out.set_index('team')['madden_qb_ovr']
+        self.assertAlmostEqual(zs['A'], 1.0, places=6)
+        self.assertAlmostEqual(zs['B'], 0.0, places=6)
+        self.assertAlmostEqual(zs['C'], -1.0, places=6)
+
+    def test_nan_stays_nan(self):
+        """Where the original value is NaN the z-score must also be NaN."""
+        df = pd.DataFrame([
+            {'season': 2023, 'week': 1, 'team': 'A', 'madden_qb_ovr': 90.0},
+            {'season': 2023, 'week': 1, 'team': 'B', 'madden_qb_ovr': float('nan')},
+            {'season': 2023, 'week': 1, 'team': 'C', 'madden_qb_ovr': 80.0},
+        ])
+        out = features.zscore_overalls_within_season(df)
+        self.assertTrue(pd.isna(out[out['team'] == 'B']['madden_qb_ovr'].iloc[0]))
+
+    def test_single_team_season_gives_zero(self):
+        """Single team → std is NaN → result must be 0.0 (not NaN)."""
+        df = pd.DataFrame([
+            {'season': 2023, 'week': 1, 'team': 'A', 'madden_qb_ovr': 88.0},
+        ])
+        out = features.zscore_overalls_within_season(df)
+        self.assertEqual(out.iloc[0]['madden_qb_ovr'], 0.0)
+
+    def test_diff_columns_untouched(self):
+        """_diff_* columns must not be modified."""
+        df = pd.DataFrame([
+            {'season': 2023, 'week': 1, 'team': 'A',
+             'madden_qb_ovr': 96.0, 'madden_qb_ovr_diff_prev': 5.0},
+        ])
+        out = features.zscore_overalls_within_season(df)
+        self.assertEqual(out.iloc[0]['madden_qb_ovr_diff_prev'], 5.0)
+
+    def test_non_ovr_columns_untouched(self):
+        """team/season/week and other columns must be unmodified."""
+        df = pd.DataFrame([
+            {'season': 2023, 'week': 3, 'team': 'KC', 'madden_qb_ovr': 96.0, 'other': 42},
+        ])
+        out = features.zscore_overalls_within_season(df)
+        self.assertEqual(out.iloc[0]['week'], 3)
+        self.assertEqual(out.iloc[0]['team'], 'KC')
+        self.assertEqual(out.iloc[0]['other'], 42)
+
+    def test_multi_season_zscored_independently(self):
+        """Z-scores are computed per season; different seasons use different means."""
+        df = pd.DataFrame([
+            {'season': 2022, 'week': 1, 'team': 'A', 'madden_qb_ovr': 84.0},
+            {'season': 2022, 'week': 1, 'team': 'B', 'madden_qb_ovr': 84.0},
+            {'season': 2023, 'week': 1, 'team': 'A', 'madden_qb_ovr': 77.0},
+            {'season': 2023, 'week': 1, 'team': 'B', 'madden_qb_ovr': 77.0},
+        ])
+        out = features.zscore_overalls_within_season(df)
+        # Both teams identical in each season → std=0 → z=0 in both seasons
+        self.assertTrue((out['madden_qb_ovr'] == 0.0).all())
+
+
 if __name__ == '__main__':
     unittest.main()

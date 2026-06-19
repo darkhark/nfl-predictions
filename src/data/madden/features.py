@@ -97,6 +97,25 @@ def add_prev_season_diff(df, prev):
     return out
 
 
+def zscore_overalls_within_season(df):
+    """Replace each madden_*_ovr (level) column with its within-season z-score.
+
+    Groups by 'season'. Where the season std is 0 or NaN (single team / all identical)
+    the result is 0.0. Where the original value is NaN the result stays NaN.
+    Diff columns (_diff_*) and all non-_ovr columns are left untouched."""
+    out = df.copy()
+    ovr_cols = [c for c in out.columns if c.startswith('madden_') and c.endswith('_ovr')]
+    grp = out.groupby('season')
+    for col in ovr_cols:
+        mean = grp[col].transform('mean')
+        std = grp[col].transform('std')
+        z = (out[col] - mean) / std
+        z = z.where(std.notna() & (std != 0), other=0.0)   # std 0/NaN -> at mean
+        z = z.where(out[col].notna(), other=np.nan)         # keep original NaNs
+        out[col] = z
+    return out
+
+
 def _safe(df, col):
     return df[col] if col in df.columns else pd.Series(np.nan, index=df.index, dtype='float64')
 
