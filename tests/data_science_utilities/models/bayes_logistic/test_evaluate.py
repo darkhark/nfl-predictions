@@ -45,7 +45,7 @@ class TestMetrics(unittest.TestCase):
 
     def test_evaluate_dict_keys(self):
         weeks = np.repeat([1, 2], 100)
-        p_std = np.full(200, 0.1)
+        p_std = np.linspace(0.02, 0.2, 200)
         res = evaluate.evaluate(self.y, self.p, p_std=p_std, weeks=weeks)
         for k in ["auroc", "accuracy", "brier", "logloss", "per_week_auroc_mean"]:
             self.assertIn(k, res)

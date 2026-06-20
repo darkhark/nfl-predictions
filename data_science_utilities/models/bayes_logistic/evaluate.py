@@ -37,8 +37,11 @@ def reliability_curve(y_true, preds, n_bins=10):
 
 
 def width_stratified_brier(y_true, preds, preds_std, n_quartiles=4):
-    df = pd.DataFrame({"y": np.asarray(y_true), "p": np.asarray(preds), "std": np.asarray(preds_std)})
-    df["q"] = pd.qcut(df["std"], n_quartiles, labels=None, duplicates="drop")
+    df = pd.DataFrame(
+        {"y": np.asarray(y_true), "p": np.asarray(preds), "std": np.asarray(preds_std)}
+    )
+    labels = ["narrowest", "q2", "q3", "widest"][:n_quartiles]
+    df["q"] = pd.qcut(df["std"], n_quartiles, labels=labels)
     return df.groupby("q", observed=True).apply(
         lambda x: brier_score_loss(x["y"], x["p"]), include_groups=False
     )
@@ -54,11 +57,8 @@ def evaluate(y_true, preds, p_std=None, weeks=None):
     if weeks is not None:
         _, res["per_week_auroc_mean"] = per_week_auroc(y_true, preds, weeks)
     if p_std is not None:
-        try:
-            res["width_stratified_brier"] = {
-                str(k): float(v)
-                for k, v in width_stratified_brier(y_true, preds, p_std).items()
-            }
-        except Exception:
-            pass
+        res["width_stratified_brier"] = {
+            str(k): float(v)
+            for k, v in width_stratified_brier(y_true, preds, p_std).items()
+        }
     return res
