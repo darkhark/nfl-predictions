@@ -86,3 +86,45 @@ class TestLoadFeatureList(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+import numpy as np
+
+
+def _synthetic_seasons():
+    # two rows per season 2019..2025 so splits are non-empty
+    rows = []
+    for season in range(2019, 2026):
+        for win in (0, 1):
+            rows.append({"season": season, "target_win": win, "week": 1, "feat": season + win})
+    return pd.DataFrame(rows)
+
+
+class TestLoadAndSplit(unittest.TestCase):
+    def test_split_boundaries(self):
+        df = _synthetic_seasons()
+        split = data_prep.split_frames(df)  # split a given (already shuffled) frame
+        self.assertTrue((split.train["season"] < 2022).all())
+        self.assertTrue(((split.valid["season"] >= 2022) & (split.valid["season"] < 2024)).all())
+        self.assertTrue((split.holdout["season"] >= 2024).all())
+        # every row lands in exactly one fold
+        self.assertEqual(len(split.train) + len(split.valid) + len(split.holdout), len(df))
+
+    def test_seed_is_reproducible(self):
+        df = _synthetic_seasons()
+        a = data_prep.shuffle(df, seed=32)
+        b = data_prep.shuffle(df, seed=32)
+        pd.testing.assert_frame_equal(a, b)
+
+    def test_get_target_is_int_array(self):
+        df = _synthetic_seasons()
+        y = data_prep.get_target(df)
+        self.assertEqual(y.dtype, np.dtype(int))
+        self.assertEqual(set(np.unique(y)), {0, 1})
+
+
+class TestLoadAndSplitRealData(unittest.TestCase):
+    def test_holdout_is_2024_plus_2025(self):
+        split = data_prep.load_and_split()
+        self.assertEqual(sorted(split.holdout["season"].unique().tolist()), [2024, 2025])
+        self.assertTrue((split.train["season"] < 2022).all())

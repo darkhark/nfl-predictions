@@ -27,3 +27,37 @@ def load_feature_list(path=FEATURE_LIST_PATH):
     """Read the frozen feature list (one feature per row, '#'-comment lines skipped)."""
     df = pd.read_csv(path, comment="#")
     return df["feature"].tolist()
+
+
+from dataclasses import dataclass
+
+
+@dataclass
+class Split:
+    train: pd.DataFrame
+    valid: pd.DataFrame
+    holdout: pd.DataFrame
+
+
+def shuffle(df, seed=RANDOM_SEED):
+    """Champion-protocol shuffle: same call as bart.ipynb."""
+    out = df.sample(frac=1, random_state=seed).reset_index(drop=True)
+    np.random.seed(seed)
+    return out
+
+
+def split_frames(df):
+    """Fixed season split: train<2022, valid 2022-2023, holdout>=2024."""
+    train = df[df["season"] < 2022]
+    valid = df[(df["season"] >= 2022) & (df["season"] < 2024)]
+    holdout = df[df["season"] >= 2024].copy()
+    return Split(train=train, valid=valid, holdout=holdout)
+
+
+def load_and_split(parquet_path=PARQUET_PATH, seed=RANDOM_SEED):
+    df = pd.read_parquet(parquet_path)
+    return split_frames(shuffle(df, seed=seed))
+
+
+def get_target(df):
+    return df[TARGET].to_numpy(dtype=int)
