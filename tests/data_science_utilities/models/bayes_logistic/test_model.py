@@ -28,7 +28,12 @@ class TestBuildModel(unittest.TestCase):
     def test_horseshoe_model_builds(self):
         X, y = _toy()
         m = model.build_model(X, y, prior="horseshoe")
-        self.assertIsNotNone(m)
+        free_names = {v.name for v in m.free_RVs}
+        det_names = {d.name for d in m.deterministics}
+        for name in ("tau", "lam", "c2", "z"):
+            self.assertIn(name, free_names)
+        self.assertIn("beta", det_names)
+        self.assertIn("p", det_names)
 
     def test_unknown_prior_raises(self):
         X, y = _toy()
@@ -46,6 +51,7 @@ class TestSamplePredictDiagnostics(unittest.TestCase):
         self.assertEqual(std_p.shape, (20,))
         self.assertTrue(((mean_p >= 0) & (mean_p <= 1)).all())
         self.assertTrue((std_p >= 0).all())
+        self.assertTrue(std_p.max() > 1e-6)
 
     def test_predict_is_deterministic_with_seed(self):
         X, y = _toy()
@@ -54,6 +60,15 @@ class TestSamplePredictDiagnostics(unittest.TestCase):
         a, _ = model.predict(m, idata, X[:10], seed=32)
         b, _ = model.predict(m, idata, X[:10], seed=32)
         np.testing.assert_allclose(a, b)
+
+    def test_horseshoe_sample_predict_shapes(self):
+        X, y = _toy()
+        m = model.build_model(X, y, prior="horseshoe")
+        idata = model.sample(m, target_accept=0.95, **SAMPLE_KW)
+        mean_p, std_p = model.predict(m, idata, X[:20])
+        self.assertEqual(mean_p.shape, (20,))
+        self.assertEqual(std_p.shape, (20,))
+        self.assertTrue(((mean_p >= 0) & (mean_p <= 1)).all())
 
     def test_diagnostics_keys(self):
         X, y = _toy()
