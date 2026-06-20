@@ -124,5 +124,54 @@ class TestLoadAndSplitRealData(unittest.TestCase):
         self.assertTrue((split.train["season"] < 2022).all())
 
 
+class TestTrainFitPreprocessor(unittest.TestCase):
+    def _frame(self, vals, extra=None):
+        d = {"a": vals}
+        if extra is not None:
+            d["b"] = extra
+        return pd.DataFrame(d)
+
+    def test_standardizes_using_train_moments_only(self):
+        train = self._frame([0.0, 2.0, 4.0])           # mean 2, std 2 (ddof=0)
+        pre = data_prep.TrainFitPreprocessor(["a"]).fit(train)
+        # a *different* frame must be standardized with TRAIN mean/std, not its own
+        other = self._frame([2.0, 2.0, 2.0])
+        out = pre.transform(other)
+        np.testing.assert_allclose(out[:, 0], [0.0, 0.0, 0.0])  # (2-2)/2 == 0
+        np.testing.assert_allclose(pre.means_, [2.0])
+        np.testing.assert_allclose(pre.stds_, [2.0])
+
+    def test_median_impute_and_missing_flag_on_train_nan(self):
+        train = self._frame([1.0, np.nan, 3.0])         # train median 2.0
+        pre = data_prep.TrainFitPreprocessor(["a"]).fit(train)
+        self.assertIn("a_was_missing", pre.feature_names_out_)
+        test = self._frame([np.nan, 5.0, 5.0])
+        out = pre.transform(test)
+        flag_idx = pre.feature_names_out_.index("a_was_missing")
+        np.testing.assert_allclose(out[:, flag_idx], [1.0, 0.0, 0.0])  # flag from raw NaN
+        # imputed value standardized: first row used train median 2.0 before scaling
+        base_idx = pre.feature_names_out_.index("a")
+        mean_a, std_a = pre.means_[base_idx], pre.stds_[base_idx]
+        np.testing.assert_allclose(out[0, base_idx], (2.0 - mean_a) / std_a)
+
+    def test_no_flag_when_train_has_no_nan(self):
+        train = self._frame([1.0, 2.0, 3.0])
+        pre = data_prep.TrainFitPreprocessor(["a"]).fit(train)
+        self.assertEqual(pre.feature_names_out_, ["a"])  # no flag column
+
+    def test_zero_variance_guard(self):
+        train = self._frame([5.0, 5.0, 5.0])            # std 0
+        pre = data_prep.TrainFitPreprocessor(["a"]).fit(train)
+        out = pre.transform(train)
+        self.assertFalse(np.isnan(out).any())
+        np.testing.assert_allclose(out[:, 0], [0.0, 0.0, 0.0])
+
+    def test_transform_output_has_no_nan(self):
+        train = self._frame([1.0, np.nan, 3.0], extra=[1.0, 2.0, 3.0])
+        pre = data_prep.TrainFitPreprocessor(["a", "b"]).fit(train)
+        out = pre.transform(self._frame([np.nan, 1.0, 2.0], extra=[9.0, 8.0, 7.0]))
+        self.assertFalse(np.isnan(out).any())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -59,3 +59,45 @@ def load_and_split(parquet_path=PARQUET_PATH, seed=RANDOM_SEED):
 
 def get_target(df):
     return df[TARGET].to_numpy(dtype=int)
+
+
+class TrainFitPreprocessor:
+    """Median-impute (+ missingness flag) then z-score, all fit on the train fold.
+
+    Output column order: the base features (in the given order), then a
+    ``<feat>_was_missing`` flag for each base feature that had any NaN in train.
+    Base features are standardized; flags are left as raw 0/1.
+    """
+
+    def __init__(self, feature_names):
+        self.feature_names = list(feature_names)
+
+    def fit(self, train_df):
+        X = train_df[self.feature_names]
+        self.medians_ = X.median(numeric_only=False)
+        self.nan_cols_ = [c for c in self.feature_names if X[c].isna().any()]
+        imputed = X.fillna(self.medians_)
+        base_mean = imputed.mean().to_numpy(dtype=float)
+        base_std = imputed.std(ddof=1).to_numpy(dtype=float)
+        base_std = np.where(base_std == 0.0, 1.0, base_std)  # zero-variance guard
+        self.feature_names_out_ = list(self.feature_names) + [
+            f"{c}_was_missing" for c in self.nan_cols_
+        ]
+        flag_mean = np.zeros(len(self.nan_cols_))
+        flag_std = np.ones(len(self.nan_cols_))
+        self.means_ = np.concatenate([base_mean, flag_mean])
+        self.stds_ = np.concatenate([base_std, flag_std])
+        return self
+
+    def transform(self, df):
+        X = df[self.feature_names]
+        flags = np.column_stack(
+            [X[c].isna().to_numpy(dtype=float) for c in self.nan_cols_]
+        ) if self.nan_cols_ else np.empty((len(X), 0))
+        imputed = X.fillna(self.medians_).to_numpy(dtype=float)
+        base = (imputed - self.means_[: len(self.feature_names)]) / self.stds_[
+            : len(self.feature_names)
+        ]
+        out = np.column_stack([base, flags]) if self.nan_cols_ else base
+        assert not np.isnan(out).any(), "NaN survived preprocessing"
+        return out
