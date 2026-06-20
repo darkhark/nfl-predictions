@@ -11,8 +11,6 @@ import os
 import sys
 import time
 
-import numpy as np
-
 # Repo root on sys.path so first-party namespace packages import when run by path.
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if REPO_ROOT not in sys.path:
@@ -32,7 +30,9 @@ DEFAULT_OUTDIR = os.path.join(REPO_ROOT, "data", "predict_games", "bayes_logisti
 TARGET_ACCEPT = {"normal": 0.9, "horseshoe": 0.95}
 
 
-def run(prior, split, feature_names, results_dir, *, draws, tune, chains, seed):
+def run(prior, split, feature_names, results_dir, *, draws, tune, chains, seed, target_accept=None):
+    if target_accept is None:
+        target_accept = TARGET_ACCEPT[prior]
     pre = data_prep.TrainFitPreprocessor(feature_names).fit(split.train)
     X_train = pre.transform(split.train)
     y_train = data_prep.get_target(split.train)
@@ -43,7 +43,7 @@ def run(prior, split, feature_names, results_dir, *, draws, tune, chains, seed):
     pm_model = model.build_model(X_train, y_train, prior=prior)
     idata = model.sample(
         pm_model, draws=draws, tune=tune, chains=chains, seed=seed,
-        target_accept=TARGET_ACCEPT[prior],
+        target_accept=target_accept,
     )
     mean_p, std_p = model.predict(pm_model, idata, X_holdout, seed=seed)
     elapsed = time.time() - t0
