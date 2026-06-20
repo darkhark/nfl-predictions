@@ -1,0 +1,88 @@
+import unittest
+
+import pandas as pd
+
+from data_science_utilities.models.bayes_logistic import data_prep
+
+# The 54 features of the BART Run-6 set (b1410bd rfe_features_kfolds.csv .loc[54]).
+EXPECTED_54 = [
+    "is_home_target",
+    "target_def_cumulative_avg_points_allowed_rank",
+    "opp_def_cumulative_avg_points_allowed_rank",
+    "off_opp_passing_epa_cumulative_average_rank",
+    "target_off_cumulative_avg_score_rank",
+    "opp_off_cumulative_avg_score_rank",
+    "off_target_passing_epa_cumulative_average_rank",
+    "off_target_pacr",
+    "def_opp_rushing_yards_cumulative_average_rank",
+    "off_target_interceptions_cumulative_average_rank",
+    "def_target_carries_cumulative_average_rank",
+    "def_target_rushing_fumbles_lost_cumulative_average_rank",
+    "def_opp_attempts",
+    "def_target_attempts",
+    "def_target_rushing_yards_cumulative_average_rank",
+    "def_opp_rushing_tds_cumulative_average_rank",
+    "def_opp_racr",
+    "def_target_rushing_tds_cumulative_average_rank",
+    "off_target_sack_yards_cumulative_average_rank",
+    "opp_game_count",
+    "def_opp_rushing_first_downs_cumulative_average_rank",
+    "off_opp_passing_epa",
+    "off_target_passing_epa",
+    "off_opp_rushing_epa",
+    "def_opp_pacr_cumulative_average_rank_change",
+    "off_target_passing_yards_after_catch",
+    "off_target_passing_tds_cumulative_average_rank",
+    "off_opp_sacks_cumulative_average_rank",
+    "off_opp_carries_cumulative_average_rank",
+    "off_target_sacks_cumulative_average_rank",
+    "off_opp_receiving_fumbles_cumulative_average_rank",
+    "def_opp_passing_tds_cumulative_average_rank",
+    "def_target_receiving_fumbles_cumulative_average_rank_change",
+    "off_opp_interceptions_cumulative_average_rank",
+    "off_opp_passing_yards_after_catch",
+    "off_opp_sack_yards_cumulative_average_rank",
+    "def_opp_passing_yards",
+    "def_target_sack_yards",
+    "def_target_interceptions_cumulative_average_rank",
+    "off_target_attempts_cumulative_average_rank_change",
+    "def_opp_receiving_fumbles_cumulative_average_rank",
+    "def_target_sacks_cumulative_average_rank",
+    "def_opp_sack_yards",
+    "def_target_rushing_fumbles_cumulative_average_rank",
+    "off_opp_rushing_first_downs_cumulative_average_rank",
+    "off_target_sack_fumbles_cumulative_average_rank",
+    "off_target_rushing_tds_cumulative_average_rank",
+    "off_target_passing_yards",
+    "def_target_passing_tds_cumulative_average_rank",
+    "def_opp_sack_fumbles_cumulative_average_rank",
+    "off_target_carries_cumulative_average_rank_change",
+    "def_target_sack_yards_cumulative_average_rank",
+    "def_opp_passing_epa",
+    "def_target_passing_epa",
+]
+
+LEAKAGE_COLS = {
+    "game_id", "season", "season_type", "opp_team", "opp_score",
+    "target_team", "target_score", "h_win",
+}
+
+
+class TestLoadFeatureList(unittest.TestCase):
+    def test_returns_exact_54_run6_features_in_order(self):
+        feats = data_prep.load_feature_list(data_prep.FEATURE_LIST_PATH)
+        self.assertEqual(feats, EXPECTED_54)
+
+    def test_no_leakage_columns_present(self):
+        feats = data_prep.load_feature_list(data_prep.FEATURE_LIST_PATH)
+        self.assertEqual(set(feats) & LEAKAGE_COLS, set())
+
+    def test_all_features_exist_in_parquet(self):
+        feats = data_prep.load_feature_list(data_prep.FEATURE_LIST_PATH)
+        cols = pd.read_parquet(data_prep.PARQUET_PATH, columns=None).columns
+        missing = [f for f in feats if f not in cols]
+        self.assertEqual(missing, [])
+
+
+if __name__ == "__main__":
+    unittest.main()
