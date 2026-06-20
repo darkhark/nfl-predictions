@@ -7,7 +7,6 @@ the standardized *or* raw scale.
 import json
 
 import arviz as az
-import numpy as np
 
 
 def coefficient_summary(idata, feature_names_out, preprocessor, prior):
