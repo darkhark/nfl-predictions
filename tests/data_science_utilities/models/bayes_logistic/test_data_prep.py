@@ -132,7 +132,7 @@ class TestTrainFitPreprocessor(unittest.TestCase):
         return pd.DataFrame(d)
 
     def test_standardizes_using_train_moments_only(self):
-        train = self._frame([0.0, 2.0, 4.0])           # mean 2, std 2 (ddof=0)
+        train = self._frame([0.0, 2.0, 4.0])           # mean 2, std 2 (ddof=1)
         pre = data_prep.TrainFitPreprocessor(["a"]).fit(train)
         # a *different* frame must be standardized with TRAIN mean/std, not its own
         other = self._frame([2.0, 2.0, 2.0])

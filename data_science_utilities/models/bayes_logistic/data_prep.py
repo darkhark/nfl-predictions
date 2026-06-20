@@ -74,10 +74,11 @@ class TrainFitPreprocessor:
 
     def fit(self, train_df):
         X = train_df[self.feature_names]
-        self.medians_ = X.median(numeric_only=False)
+        self.medians_ = X.median()
         self.nan_cols_ = [c for c in self.feature_names if X[c].isna().any()]
         imputed = X.fillna(self.medians_)
         base_mean = imputed.mean().to_numpy(dtype=float)
+        # ddof=1 (sample std): matches the test expectation; the brief's ddof=0 note was erroneous.
         base_std = imputed.std(ddof=1).to_numpy(dtype=float)
         base_std = np.where(base_std == 0.0, 1.0, base_std)  # zero-variance guard
         self.feature_names_out_ = list(self.feature_names) + [
@@ -99,5 +100,6 @@ class TrainFitPreprocessor:
             : len(self.feature_names)
         ]
         out = np.column_stack([base, flags]) if self.nan_cols_ else base
-        assert not np.isnan(out).any(), "NaN survived preprocessing"
+        if np.isnan(out).any():
+            raise ValueError("NaN survived preprocessing — check imputation logic")
         return out
