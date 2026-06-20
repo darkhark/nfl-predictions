@@ -1,5 +1,6 @@
 import unittest
 
+import numpy as np
 import pandas as pd
 
 from data_science_utilities.models.bayes_logistic import data_prep
@@ -84,13 +85,6 @@ class TestLoadFeatureList(unittest.TestCase):
         self.assertEqual(missing, [])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-import numpy as np
-
-
 def _synthetic_seasons():
     # two rows per season 2019..2025 so splits are non-empty
     rows = []
@@ -128,3 +122,7 @@ class TestLoadAndSplitRealData(unittest.TestCase):
         split = data_prep.load_and_split()
         self.assertEqual(sorted(split.holdout["season"].unique().tolist()), [2024, 2025])
         self.assertTrue((split.train["season"] < 2022).all())
+
+
+if __name__ == "__main__":
+    unittest.main()
