@@ -30,18 +30,21 @@ class TestMetrics(unittest.TestCase):
         weeks = np.repeat([1, 2], 100)
         series, mean = evaluate.per_week_auroc(self.y, self.p, weeks)
         self.assertEqual(sorted(series.index.tolist()), [1, 2])
+        mask1 = weeks == 1
+        self.assertAlmostEqual(series[1], roc_auc_score(self.y[mask1], self.p[mask1]))
         self.assertAlmostEqual(mean, series.mean())
 
     def test_reliability_curve_quantile_shape(self):
         prob_true, prob_pred = evaluate.reliability_curve(self.y, self.p, n_bins=10)
         self.assertEqual(len(prob_true), len(prob_pred))
-        self.assertLessEqual(len(prob_true), 10)
+        self.assertEqual(len(prob_true), 10)
 
     def test_width_stratified_brier_returns_quartiles(self):
         rng = np.random.default_rng(1)
         p_std = rng.uniform(0.02, 0.2, size=200)
         s = evaluate.width_stratified_brier(self.y, self.p, p_std, n_quartiles=4)
         self.assertEqual(len(s), 4)
+        self.assertEqual(s.index.tolist(), ["narrowest", "q2", "q3", "widest"])
 
     def test_evaluate_dict_keys(self):
         weeks = np.repeat([1, 2], 100)
