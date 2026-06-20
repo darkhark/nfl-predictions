@@ -90,7 +90,7 @@ META_ID_COLUMNS = frozenset({
 CONTENT_FAMILIES = (
     'context_rest', 'market', 'schedule_points', 'box_score',
     'pbp_phase1', 'pbp_phase2_directional', 'pbp_phase3',
-    'situational_playcall', 'snap_share',
+    'situational_playcall', 'snap_share', 'madden_ratings',
 )
 
 
@@ -123,6 +123,8 @@ def content_family(column):
 
     Raises ValueError if the column matches no family (so an unexpected naming
     change fails loudly rather than being silently dropped from the partition)."""
+    if 'madden' in column:
+        return 'madden_ratings'
     if column in CONTEXT_REST_COLUMNS:
         return 'context_rest'
     if column in MARKET_COLUMNS:
