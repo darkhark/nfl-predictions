@@ -1,0 +1,60 @@
+{
+  "variants": {
+    "normal": {
+      "auroc": 0.6946265408737025,
+      "accuracy": 0.6571691176470589,
+      "brier": 0.22083728844342582,
+      "logloss": 0.6311561163310642,
+      "per_week_auroc_mean": 0.7008227712222834,
+      "width_stratified_brier": {
+        "narrowest": 0.17395996111346732,
+        "q2": 0.22014835353577697,
+        "q3": 0.23314116158840803,
+        "widest": 0.256099677536051
+      },
+      "diagnostics": {
+        "max_rhat": 1.0,
+        "min_ess_bulk": 9041.0,
+        "n_divergences": 0,
+        "passed": true
+      },
+      "elapsed_sec": 37.7
+    },
+    "horseshoe": {
+      "auroc": 0.6485659061418685,
+      "accuracy": 0.5900735294117647,
+      "brier": 0.2319918529959845,
+      "logloss": 0.6549225008295343,
+      "per_week_auroc_mean": 0.6531127968533412,
+      "width_stratified_brier": {
+        "narrowest": 0.19956319238195586,
+        "q2": 0.24532240840421463,
+        "q3": 0.2507385923344625,
+        "widest": 0.23234321886330497
+      },
+      "diagnostics": {
+        "max_rhat": 1.53,
+        "min_ess_bulk": 7.0,
+        "n_divergences": 2062,
+        "passed": false
+      },
+      "elapsed_sec": 224.9
+    }
+  },
+  "reference": {
+    "BART Run-6 (same 54 feats)": {
+      "auroc": 0.705,
+      "brier": 0.2194
+    },
+    "BART Run-10 (champion)": {
+      "auroc": 0.708,
+      "brier": 0.2185
+    },
+    "XGBoost Run-11 (best)": {
+      "auroc": 0.707,
+      "brier": 0.2206
+    }
+  },
+  "n_features": 54,
+  "smoke": false
+}

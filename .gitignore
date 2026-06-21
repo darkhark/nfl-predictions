@@ -111,3 +111,6 @@ coverage.xml
 
 # Virtual Environments (use requirements.txt instead)
 venv/
+
+# Bayesian-logistic full posterior traces (hundreds of MB, regenerable via the script)
+data/predict_games/bayes_logistic/*.nc

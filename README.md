@@ -167,6 +167,7 @@ metrics are tracked:
 | 8 | 2026-06-12 | **BART** re-trained on the run-7 play-by-play feature set (corrected — see run 8 note) | 45 | 0.702 | 0.656 | 0.2199 |
 | 9 | 2026-06-12 | Rank-only + **Phase 2 directional run/pass features**, XGBoost | 57 | 0.694 | 0.645 | 0.2291 |
 | 10 | 2026-06-12 | **BART** on the run-9 directional feature set | 57 | **0.708** | 0.654 | **0.2185** |
+| 27 | 2026-06-20 | **Bayesian logistic regression** (PyMC, weakly-informative `Normal(0,1)` prior), same 54 features / split as run 6 | 54 | 0.695 | 0.657 | 0.2208 |
 
 **What changed between runs**
 
@@ -283,6 +284,42 @@ metrics are tracked:
   > 0.2185) — treat BART numbers as carrying roughly ±0.004 run-to-run wobble. Both
   > executions beat run 6 on ROC-AUC and Brier, so the directional improvement is
   > robust to sampler noise; the table keeps the first recorded execution.
+- **Run 10 → 27 (classic parametric Bayesian baseline):** added a **Bayesian logistic
+  regression** (PyMC 5, NUTS) as a linear counterpoint to BART, trained and evaluated on the
+  *identical* protocol as run 6 — same parquet, seed-32 shuffle, frozen **54-feature** run-6
+  set, train `<2022` / 2024+2025 hold-out, per-row metrics. Features are median-imputed
+  (leakage-safe, fit on the train fold; the 54-set is NaN-free so imputation is inert here)
+  and z-scored; the posterior is exported as a per-coefficient JSON summary (mean/sd +
+  standardizer moments) to seed a later weekly-Madden transfer-learning prior. Two priors:
+  - **Weakly-informative `Normal(0, 1)` (reported):** hold-out **ROC-AUC 0.695**, accuracy
+    **0.657**, **Brier 0.2208**, log loss 0.631; per-week mean AUROC 0.701. Sampler
+    diagnostics are clean — **R-hat 1.000, 0 divergences, min ESS ≈ 9,000** (4 chains ×
+    2,000 draws). The Bayesian payoff holds: the posterior-width-stratified Brier is
+    **strictly monotone** — **0.174 / 0.220 / 0.233 / 0.256** from narrowest to widest
+    posterior quartile — so the per-row predictive uncertainty is trustworthy, and the
+    coefficients are interpretable and correctly signed (home field **+0.30** on the logit
+    is the single largest effect; offensive/defensive scoring ranks follow with the expected
+    signs).
+  - **Regularized horseshoe (excluded):** failed to converge — **2,062 divergences, R-hat
+    1.53, ESS ≈ 7** at `target_accept=0.95`. Its 0.649 hold-out number is **not trustworthy**
+    and is reported only as a diagnostics failure: the horseshoe's funnel geometry is hard
+    for NUTS on these 54 correlated rank features, and a reparameterization (or much higher
+    `target_accept` / longer tuning) would be needed. The trace is saved for inspection.
+  - **Verdict — competitive-adjacent, but the trees still win.** On identical inputs the
+    linear Bayesian model lands **~1 ROC-AUC point below** BART run 6 (0.705) and run 10
+    (0.708) and the best XGBoost (run 11, 0.707). The gap is consistent with the
+    linear-additivity assumption — a GLM cannot represent the feature interactions the trees
+    split on. The model's distinguishing value is its **well-calibrated, monotone
+    uncertainty** and its **transparent coefficients**, and its saved posterior is the
+    foundation for the planned weekly-Madden transfer-learning update. Reproduce with
+    `python scripts/experiments/bayes_logistic.py` (~5 min, seed 32); artifacts land in
+    `data/predict_games/bayes_logistic/` (the multi-hundred-MB `.nc` traces are git-ignored;
+    the compact `coef_summary_*.json` files are the committed transfer-learning surface).
+  > Branch note: runs **11–26** (play-by-play phases, 1-SE selection, situational/recency
+  > features, and the Madden-ratings ablations) were developed on the
+  > `madden-ratings-features` branch and are not in this branch's table — this entry
+  > continues the global run sequence and becomes contiguous once those merge to master. The
+  > on-branch comparison anchor is **run 6** (BART, 0.705, the identical 54 features).
 
 ## Roadmap
 
@@ -291,7 +328,11 @@ metrics are tracked:
   `docs/superpowers/specs/` and phase plans in `docs/superpowers/plans/`) and Next Gen
   Stats integration at the weekly grain; calibration pass on the run-10 BART champion
   (best AUROC/Brier but 0.5-threshold accuracy lags — calibration may recover it).
-- Extend the Bayesian comparison (BART baseline done — run 6): more chains/draws, prior
-  sensitivity, and using posterior uncertainty for bet-sizing-style decision rules.
+- Extend the Bayesian comparison: the BART baseline (run 6) and a **parametric Bayesian
+  logistic regression** (run 27) are both done. Next: fix the regularized-horseshoe
+  convergence (reparameterize / raise `target_accept`), and build the weekly-Madden
+  **transfer-learning** model that seeds its prior from run 27's saved coefficient posterior.
+  Posterior uncertainty (now shown to be monotone/trustworthy) feeds bet-sizing-style
+  decision rules.
 - Address known `TODO`s: prevent season-average leakage in the NGS diff features, and move
   notebook-style execution out of `next_gen_stats/collect.py` import path.

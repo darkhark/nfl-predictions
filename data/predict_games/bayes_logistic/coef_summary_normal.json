@@ -1,0 +1,389 @@
+{
+  "prior": "normal",
+  "scale": "standardized",
+  "n_features": 54,
+  "intercept": {
+    "mean": 1.19393092721242e-05,
+    "sd": 0.02140249638005538
+  },
+  "coefficients": [
+    {
+      "feature": "is_home_target",
+      "mean": 0.29941828519751046,
+      "sd": 0.022041440961963137,
+      "standardizer_mean": 0.5,
+      "standardizer_std": 0.5000257115676513
+    },
+    {
+      "feature": "target_def_cumulative_avg_points_allowed_rank",
+      "mean": -0.19258329263192306,
+      "sd": 0.0486953143775322,
+      "standardizer_mean": 15.363636363636363,
+      "standardizer_std": 8.897626946555823
+    },
+    {
+      "feature": "opp_def_cumulative_avg_points_allowed_rank",
+      "mean": 0.18288403535730557,
+      "sd": 0.048147838323653075,
+      "standardizer_mean": 15.363636363636363,
+      "standardizer_std": 8.897626946555823
+    },
+    {
+      "feature": "off_opp_passing_epa_cumulative_average_rank",
+      "mean": 0.08807553781719958,
+      "sd": 0.042047771524390355,
+      "standardizer_mean": 15.502776635129576,
+      "standardizer_std": 8.889941094395255
+    },
+    {
+      "feature": "target_off_cumulative_avg_score_rank",
+      "mean": -0.20092084166218865,
+      "sd": 0.05278297022029929,
+      "standardizer_mean": 15.38070752776635,
+      "standardizer_std": 8.872023828991653
+    },
+    {
+      "feature": "opp_off_cumulative_avg_score_rank",
+      "mean": 0.19263099737236514,
+      "sd": 0.03998605247588447,
+      "standardizer_mean": 15.38070752776635,
+      "standardizer_std": 8.872023828991653
+    },
+    {
+      "feature": "off_target_passing_epa_cumulative_average_rank",
+      "mean": -0.08808298788774815,
+      "sd": 0.046840250207402866,
+      "standardizer_mean": 15.502776635129576,
+      "standardizer_std": 8.889941094395255
+    },
+    {
+      "feature": "off_target_pacr",
+      "mean": -0.05521656620683546,
+      "sd": 0.024623431948382613,
+      "standardizer_mean": 0.9206910802072098,
+      "standardizer_std": 0.9198508275259916
+    },
+    {
+      "feature": "def_opp_rushing_yards_cumulative_average_rank",
+      "mean": 0.09823551659175327,
+      "sd": 0.03866321402458219,
+      "standardizer_mean": 15.4296585767174,
+      "standardizer_std": 8.898116489529901
+    },
+    {
+      "feature": "off_target_interceptions_cumulative_average_rank",
+      "mean": 0.04318897766291386,
+      "sd": 0.025924305331977527,
+      "standardizer_mean": 13.661559029206089,
+      "standardizer_std": 8.60683859211778
+    },
+    {
+      "feature": "def_target_carries_cumulative_average_rank",
+      "mean": 0.07048161760953459,
+      "sd": 0.04174232739018774,
+      "standardizer_mean": 15.32908268202386,
+      "standardizer_std": 8.900659279984913
+    },
+    {
+      "feature": "def_target_rushing_fumbles_lost_cumulative_average_rank",
+      "mean": -0.04464426504258899,
+      "sd": 0.030722249014757272,
+      "standardizer_mean": 11.62649115590292,
+      "standardizer_std": 9.514629364870858
+    },
+    {
+      "feature": "def_opp_attempts",
+      "mean": -0.07127797978583399,
+      "sd": 0.03656862297795309,
+      "standardizer_mean": 33.88440970793912,
+      "standardizer_std": 8.491546010427065
+    },
+    {
+      "feature": "def_target_attempts",
+      "mean": -0.020545347500625442,
+      "sd": 0.023926691157425076,
+      "standardizer_mean": 33.88440970793912,
+      "standardizer_std": 8.491546010427065
+    },
+    {
+      "feature": "def_target_rushing_yards_cumulative_average_rank",
+      "mean": -0.1335090348745639,
+      "sd": 0.038091291672164324,
+      "standardizer_mean": 15.4296585767174,
+      "standardizer_std": 8.898116489529901
+    },
+    {
+      "feature": "def_opp_rushing_tds_cumulative_average_rank",
+      "mean": -0.012906759808718894,
+      "sd": 0.03508814639646973,
+      "standardizer_mean": 13.798231180584121,
+      "standardizer_std": 9.068233745896473
+    },
+    {
+      "feature": "def_opp_racr",
+      "mean": 0.01650729836116177,
+      "sd": 0.02215111607552447,
+      "standardizer_mean": 4.638536179953779,
+      "standardizer_std": 12.003215399902293
+    },
+    {
+      "feature": "def_target_rushing_tds_cumulative_average_rank",
+      "mean": 0.02213252481906001,
+      "sd": 0.0338357404493681,
+      "standardizer_mean": 13.798231180584121,
+      "standardizer_std": 9.068233745896473
+    },
+    {
+      "feature": "off_target_sack_yards_cumulative_average_rank",
+      "mean": -0.03560577278181309,
+      "sd": 0.04936953330283992,
+      "standardizer_mean": 15.13564376799671,
+      "standardizer_std": 8.836127291853913
+    },
+    {
+      "feature": "opp_game_count",
+      "mean": 0.019454545407433178,
+      "sd": 0.025666695853751795,
+      "standardizer_mean": 8.555532702591526,
+      "standardizer_std": 4.614134903444978
+    },
+    {
+      "feature": "def_opp_rushing_first_downs_cumulative_average_rank",
+      "mean": -0.0010727688007294118,
+      "sd": 0.04006695570067409,
+      "standardizer_mean": 15.001131221719458,
+      "standardizer_std": 8.907855562863888
+    },
+    {
+      "feature": "off_opp_passing_epa",
+      "mean": -0.0498686458713697,
+      "sd": 0.02803745999337878,
+      "standardizer_mean": 1.0692909218177324,
+      "standardizer_std": 10.995685444110705
+    },
+    {
+      "feature": "off_target_passing_epa",
+      "mean": 0.05578199628515328,
+      "sd": 0.032252978541283936,
+      "standardizer_mean": 1.0692909218177324,
+      "standardizer_std": 10.995685444110705
+    },
+    {
+      "feature": "off_opp_rushing_epa",
+      "mean": -0.029942512935498967,
+      "sd": 0.02302866793644399,
+      "standardizer_mean": -1.7235783266566316,
+      "standardizer_std": 5.27665293075411
+    },
+    {
+      "feature": "def_opp_pacr_cumulative_average_rank_change",
+      "mean": -0.07423890375845743,
+      "sd": 0.022339980881241728,
+      "standardizer_mean": -0.06633072809543397,
+      "standardizer_std": 3.8290667536739504
+    },
+    {
+      "feature": "off_target_passing_yards_after_catch",
+      "mean": 0.03618775213564737,
+      "sd": 0.03215757436212352,
+      "standardizer_mean": 126.8789592760181,
+      "standardizer_std": 65.13307332749497
+    },
+    {
+      "feature": "off_target_passing_tds_cumulative_average_rank",
+      "mean": -0.014742159415828264,
+      "sd": 0.042625016648756564,
+      "standardizer_mean": 14.256890168654875,
+      "standardizer_std": 8.685852199018381
+    },
+    {
+      "feature": "off_opp_sacks_cumulative_average_rank",
+      "mean": -0.08878842663781387,
+      "sd": 0.05017388301525727,
+      "standardizer_mean": 14.478918140682847,
+      "standardizer_std": 8.758256287378012
+    },
+    {
+      "feature": "off_opp_carries_cumulative_average_rank",
+      "mean": -0.09101883052154275,
+      "sd": 0.039547555511924265,
+      "standardizer_mean": 15.287638831756478,
+      "standardizer_std": 8.869692581281038
+    },
+    {
+      "feature": "off_target_sacks_cumulative_average_rank",
+      "mean": 0.10776242094916184,
+      "sd": 0.049945143065694086,
+      "standardizer_mean": 14.478918140682847,
+      "standardizer_std": 8.758256287378012
+    },
+    {
+      "feature": "off_opp_receiving_fumbles_cumulative_average_rank",
+      "mean": -0.003965649958347713,
+      "sd": 0.02262134304735264,
+      "standardizer_mean": 11.962875359934184,
+      "standardizer_std": 7.9543048436756045
+    },
+    {
+      "feature": "def_opp_passing_tds_cumulative_average_rank",
+      "mean": -0.0020995777093668895,
+      "sd": 0.037367238580102255,
+      "standardizer_mean": 14.148704236939531,
+      "standardizer_std": 8.916833642758418
+    },
+    {
+      "feature": "def_target_receiving_fumbles_cumulative_average_rank_change",
+      "mean": 0.023517123276290904,
+      "sd": 0.021735776065075665,
+      "standardizer_mean": 0.35592348827642944,
+      "standardizer_std": 4.413698124373057
+    },
+    {
+      "feature": "off_opp_interceptions_cumulative_average_rank",
+      "mean": -0.04397143691546282,
+      "sd": 0.02561691359699812,
+      "standardizer_mean": 13.661559029206089,
+      "standardizer_std": 8.60683859211778
+    },
+    {
+      "feature": "off_opp_passing_yards_after_catch",
+      "mean": -0.04708074399487779,
+      "sd": 0.02944255155697193,
+      "standardizer_mean": 126.8789592760181,
+      "standardizer_std": 65.13307332749498
+    },
+    {
+      "feature": "off_opp_sack_yards_cumulative_average_rank",
+      "mean": 0.01633392743491252,
+      "sd": 0.049595262088874666,
+      "standardizer_mean": 15.13564376799671,
+      "standardizer_std": 8.836127291853913
+    },
+    {
+      "feature": "def_opp_passing_yards",
+      "mean": 0.13996275604081698,
+      "sd": 0.04555036489338092,
+      "standardizer_mean": 240.11620732208968,
+      "standardizer_std": 77.14308462909254
+    },
+    {
+      "feature": "def_target_sack_yards",
+      "mean": 0.024589339745950674,
+      "sd": 0.026271788330430316,
+      "standardizer_mean": 14.777766351295764,
+      "standardizer_std": 12.466995420339796
+    },
+    {
+      "feature": "def_target_interceptions_cumulative_average_rank",
+      "mean": -0.008009844925257512,
+      "sd": 0.025094559785437436,
+      "standardizer_mean": 13.724804607157548,
+      "standardizer_std": 8.996722963384405
+    },
+    {
+      "feature": "off_target_attempts_cumulative_average_rank_change",
+      "mean": 0.016132206861930662,
+      "sd": 0.024810417369851918,
+      "standardizer_mean": -0.11672151378033731,
+      "standardizer_std": 3.731425196889994
+    },
+    {
+      "feature": "def_opp_receiving_fumbles_cumulative_average_rank",
+      "mean": -0.046900325561071876,
+      "sd": 0.022667559765126907,
+      "standardizer_mean": 12.050185109008638,
+      "standardizer_std": 9.447710393758717
+    },
+    {
+      "feature": "def_target_sacks_cumulative_average_rank",
+      "mean": -0.0002316728648076818,
+      "sd": 0.04827658625185723,
+      "standardizer_mean": 14.362813656931303,
+      "standardizer_std": 8.906337185796028
+    },
+    {
+      "feature": "def_opp_sack_yards",
+      "mean": -0.051374241840635056,
+      "sd": 0.02524149930994942,
+      "standardizer_mean": 14.777766351295764,
+      "standardizer_std": 12.466995420339796
+    },
+    {
+      "feature": "def_target_rushing_fumbles_cumulative_average_rank",
+      "mean": 0.006892161612296271,
+      "sd": 0.030189076397805933,
+      "standardizer_mean": 13.015117235705471,
+      "standardizer_std": 9.236528603120304
+    },
+    {
+      "feature": "off_opp_rushing_first_downs_cumulative_average_rank",
+      "mean": 0.09217607162995628,
+      "sd": 0.037455092206777965,
+      "standardizer_mean": 15.034656519950637,
+      "standardizer_std": 8.835366232784317
+    },
+    {
+      "feature": "off_target_sack_fumbles_cumulative_average_rank",
+      "mean": 0.011630869583895503,
+      "sd": 0.024737900719170938,
+      "standardizer_mean": 12.648498560263267,
+      "standardizer_std": 8.166619343932265
+    },
+    {
+      "feature": "off_target_rushing_tds_cumulative_average_rank",
+      "mean": -0.03815411256937088,
+      "sd": 0.032483938870965436,
+      "standardizer_mean": 13.831962155491567,
+      "standardizer_std": 8.600289085275618
+    },
+    {
+      "feature": "off_target_passing_yards",
+      "mean": -0.00107646328962764,
+      "sd": 0.036235799665522275,
+      "standardizer_mean": 240.2097902097902,
+      "standardizer_std": 77.07417912991379
+    },
+    {
+      "feature": "def_target_passing_tds_cumulative_average_rank",
+      "mean": 0.020638562821524972,
+      "sd": 0.03715275379048743,
+      "standardizer_mean": 14.148704236939531,
+      "standardizer_std": 8.916833642758418
+    },
+    {
+      "feature": "def_opp_sack_fumbles_cumulative_average_rank",
+      "mean": -0.0018021077592655214,
+      "sd": 0.023233336581149823,
+      "standardizer_mean": 12.606334841628959,
+      "standardizer_std": 9.348042268199606
+    },
+    {
+      "feature": "off_target_carries_cumulative_average_rank_change",
+      "mean": 0.04543944896129673,
+      "sd": 0.023735886196108613,
+      "standardizer_mean": -0.041341011929247225,
+      "standardizer_std": 3.6130794903517094
+    },
+    {
+      "feature": "def_target_sack_yards_cumulative_average_rank",
+      "mean": 0.028206648725178814,
+      "sd": 0.048850961865355584,
+      "standardizer_mean": 15.113327848621966,
+      "standardizer_std": 8.906101140829344
+    },
+    {
+      "feature": "def_opp_passing_epa",
+      "mean": -0.0817838072442034,
+      "sd": 0.03801436235033629,
+      "standardizer_mean": 1.3520132843467312,
+      "standardizer_std": 10.992560603867693
+    },
+    {
+      "feature": "def_target_passing_epa",
+      "mean": 0.001737454882373266,
+      "sd": 0.02661968031867687,
+      "standardizer_mean": 1.3520132843467314,
+      "standardizer_std": 10.992560603867693
+    }
+  ]
+}
