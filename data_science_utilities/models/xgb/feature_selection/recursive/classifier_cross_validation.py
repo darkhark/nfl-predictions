@@ -1,5 +1,5 @@
 from sklearn.metrics import (
-    roc_auc_score, log_loss, f1_score, precision_score,
+    roc_auc_score, log_loss, brier_score_loss, f1_score, precision_score,
     recall_score, accuracy_score
 )
 from xgboost import XGBClassifier
@@ -25,9 +25,22 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
         self.test_preds = {}
         self.all_models = {}
         self.all_model_scores = []
+        self.all_model_score_folds = []
         self.importances = None
 
-    def get_optimal_features_no_grouped_records(self, drop_rate=.1, max_iter=10, verbose=0, base_margin=None, n_folds=5):
+    def get_optimal_features_no_grouped_records(self, drop_rate=.1, max_iter=10, verbose=0, base_margin=None,
+                                                n_folds=5, min_features=None, on_iteration=None):
+        """
+        Run cross-validated RFE for up to max_iter iterations, dropping drop_rate of the
+        surviving features each round. When min_features is set, the drop is clamped so
+        the feature count never falls below it and the loop stops once it is reached —
+        the same floor semantics as BartBackwardElimination.
+
+        on_iteration, when provided, is called after each completed iteration with a
+        dict (iteration, max_iter, num_features, score). Headless nbconvert buffers a
+        cell's stdout until the cell finishes, so callers wanting LIVE progress should
+        have the callback write to a sidecar file rather than rely on verbose prints.
+        """
         max_iter = min(max_iter, len(self.features))
         train_features = self.features
         for i in range(max_iter):
@@ -59,10 +72,22 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
                     self.all_models[len(train_features)] = {fold: model}
                     self.test_preds[len(train_features)] = {fold: test_preds}
             self.all_model_scores.append(np.mean(model_scores))
+            self.all_model_score_folds.append(list(model_scores))
+            if on_iteration is not None:
+                on_iteration({
+                    'iteration': i + 1,
+                    'max_iter': max_iter,
+                    'num_features': len(train_features),
+                    'score': self.all_model_scores[-1],
+                })
+            if min_features is not None and len(train_features) <= min_features:
+                break
             if i == 0:
                 train_features = list(self.importances.index)
             else:
                 new_num_features = int(np.floor(len(train_features) * (1 - drop_rate)))
+                if min_features is not None:
+                    new_num_features = max(new_num_features, min_features)
                 train_features = list(self.importances.index)[:new_num_features]
 
     def get_features_in_dataframe(self):
@@ -94,6 +119,28 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
                     past_scores, curr_score, curr_num_feats, min_diff
                 )
         return best_num_feats
+
+    def get_best_num_features_1se(self):
+        """Most parsimonious feature count within one standard error of the best CV
+        score. SE is the standard error across folds at the best-scoring count.
+        Direction-aware via HIGHER_IS_BETTER_METRICS, so it works for any metric
+        (roc_auc, brier, log_loss, ...). Replaces the smallest-within-tolerance rule,
+        which over-shrinks on flat curves (run-13 lesson)."""
+        sizes = list(self.all_features.keys())
+        means = list(self.all_model_scores)
+        folds = list(self.all_model_score_folds)
+        higher_is_better = self.model_score_metric in self.HIGHER_IS_BETTER_METRICS
+        best_i = (max if higher_is_better else min)(
+            range(len(means)), key=lambda i: means[i]
+        )
+        best_folds = folds[best_i]
+        se = (float(np.std(best_folds, ddof=1) / np.sqrt(len(best_folds)))
+              if len(best_folds) > 1 else 0.0)
+        if higher_is_better:
+            within = [sizes[i] for i in range(len(means)) if means[i] >= means[best_i] - se]
+        else:
+            within = [sizes[i] for i in range(len(means)) if means[i] <= means[best_i] + se]
+        return min(within)
 
     def _is_curr_score_better(self, curr_score, best_score, min_diff):
         if self.model_score_metric in self.HIGHER_IS_BETTER_METRICS:
@@ -164,6 +211,8 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
             score = roc_auc_score(y_test, preds)
         elif self.model_score_metric == 'log_loss':
             score = log_loss(y_test, preds)
+        elif self.model_score_metric == 'brier':
+            score = brier_score_loss(y_test, preds)
         elif self.model_score_metric == 'f1':
             score = f1_score(y_test, preds.round())
         elif self.model_score_metric == 'precision':
@@ -173,7 +222,7 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
         elif self.model_score_metric == 'accuracy':
             score = accuracy_score(y_test, preds.round())
         else:
-            raise ValueError('model_score_metric must be one of roc_auc, log_loss, f1, precision, recall, accuracy')
+            raise ValueError('model_score_metric must be one of roc_auc, log_loss, brier, f1, precision, recall, accuracy')
         return score
 
     def _get_non_zero_importances(self, model):

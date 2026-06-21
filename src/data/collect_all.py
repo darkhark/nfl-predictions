@@ -4,6 +4,8 @@ from src.data.next_gen_stats import collect as next_gen_collect
 from src.data.play_by_play import collect as pbp_collect
 from src.data.weekly import collect as weekly_collect
 from src.data.schedule import collect as schedule_collect
+from src.data.madden import collect as madden_collect
+from src.data.madden import features as madden_features
 
 
 def get_all_data(years):
@@ -83,6 +85,23 @@ def get_schedule_and_weekly_data(years, include_play_by_play=False):
     combined_data = pd.concat([combined_data, target_win_df], axis=1)
 
     combined_data = _shift_data(combined_data)
+
+    madden_tw = madden_collect.get_madden_data(years)
+    _madden_cols = [c for c in madden_tw.columns if c not in ('team', 'season', 'week')]
+
+    target_madden = madden_tw.rename(
+        columns={'team': 'target_team',
+                 **{c: f'target_{c}' for c in _madden_cols}})
+    opp_madden = madden_tw.rename(
+        columns={'team': 'opp_team',
+                 **{c: f'opp_{c}' for c in _madden_cols}})
+
+    combined_data = combined_data.merge(
+        target_madden, on=['target_team', 'season', 'week'], how='left', validate='many_to_one')
+    combined_data = combined_data.merge(
+        opp_madden, on=['opp_team', 'season', 'week'], how='left', validate='many_to_one')
+    combined_data = madden_features.add_madden_matchup_columns(combined_data)
+
     return combined_data
 
 
@@ -161,6 +180,22 @@ def _shift_data(combined_data):
     """
     shift the weeks for each team to get the previous week's data. For example, the stats
     for week 1 should be in week 2, and so on
+
+    Cross-season carryover: the shift is per-team but NOT grouped by season -- each team's
+    rows are sorted by (season, week) and shifted with a single shift(1) across their entire
+    history. Consequences:
+      - A team's very first game in the dataset becomes NaN (no prior row). This is the only
+        truly "empty" season opener; the assembly script drops it explicitly (week==1 &
+        season==2003).
+      - Every later season opener (week 1) inherits the team's chronologically LAST prior
+        game rather than starting fresh. Because postseason rows are still present at shift
+        time (the game_type=='REG' filter runs afterward in the assembly script), that prior
+        game is the team's last PLAYOFF game if they made the playoffs, otherwise their
+        regular-season finale. The postseason rows are dropped downstream, but the values
+        they inject into the surviving week-1 REG rows remain.
+    To make each season opener start fresh, group this shift by (target_team, season) and
+    apply the REG filter before the shift rather than after.
+
     :param combined_data: DataFrame with the combined schedule and weekly data
     :return: DataFrame with the stats shifted by one week
     """

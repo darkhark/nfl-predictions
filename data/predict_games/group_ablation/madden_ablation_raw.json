@@ -1,0 +1,106 @@
+{
+  "config": {
+    "rank_only": true,
+    "random_seed": 32,
+    "first_test_season": 2019,
+    "last_test_season": 2025,
+    "all_features": 6348,
+    "no_madden_features": 6160,
+    "madden_ratings_features": 188
+  },
+  "folds": [
+    {
+      "fold": 1,
+      "test_season": 2019,
+      "n_train": 7136,
+      "n_test": 512,
+      "brier_all": 0.22804,
+      "brier_no_madden": 0.230737,
+      "brier_delta": -0.002697,
+      "roc_auc_all": 0.666718,
+      "roc_auc_no_madden": 0.653885,
+      "roc_auc_delta": 0.012833
+    },
+    {
+      "fold": 2,
+      "test_season": 2020,
+      "n_train": 7644,
+      "n_test": 512,
+      "brier_all": 0.219141,
+      "brier_no_madden": 0.223248,
+      "brier_delta": -0.004107,
+      "roc_auc_all": 0.705643,
+      "roc_auc_no_madden": 0.694702,
+      "roc_auc_delta": 0.010941
+    },
+    {
+      "fold": 3,
+      "test_season": 2021,
+      "n_train": 8156,
+      "n_test": 544,
+      "brier_all": 0.242103,
+      "brier_no_madden": 0.237985,
+      "brier_delta": 0.004118,
+      "roc_auc_all": 0.624595,
+      "roc_auc_no_madden": 0.633299,
+      "roc_auc_delta": -0.008705
+    },
+    {
+      "fold": 4,
+      "test_season": 2022,
+      "n_train": 8668,
+      "n_test": 542,
+      "brier_all": 0.2279,
+      "brier_no_madden": 0.229847,
+      "brier_delta": -0.001948,
+      "roc_auc_all": 0.669667,
+      "roc_auc_no_madden": 0.660789,
+      "roc_auc_delta": 0.008878
+    },
+    {
+      "fold": 5,
+      "test_season": 2023,
+      "n_train": 9180,
+      "n_test": 544,
+      "brier_all": 0.235638,
+      "brier_no_madden": 0.238175,
+      "brier_delta": -0.002537,
+      "roc_auc_all": 0.637935,
+      "roc_auc_no_madden": 0.624892,
+      "roc_auc_delta": 0.013043
+    },
+    {
+      "fold": 6,
+      "test_season": 2024,
+      "n_train": 9724,
+      "n_test": 544,
+      "brier_all": 0.215892,
+      "brier_no_madden": 0.219922,
+      "brier_delta": -0.004029,
+      "roc_auc_all": 0.721237,
+      "roc_auc_no_madden": 0.705882,
+      "roc_auc_delta": 0.015355
+    },
+    {
+      "fold": 7,
+      "test_season": 2025,
+      "n_train": 10266,
+      "n_test": 544,
+      "brier_all": 0.229102,
+      "brier_no_madden": 0.229156,
+      "brier_delta": -5.4e-05,
+      "roc_auc_all": 0.659007,
+      "roc_auc_no_madden": 0.658683,
+      "roc_auc_delta": 0.000324
+    }
+  ],
+  "summary": {
+    "brier_all_mean": 0.228259,
+    "brier_no_madden_mean": 0.229867,
+    "brier_delta_mean": -0.001608,
+    "roc_auc_all_mean": 0.669257,
+    "roc_auc_no_madden_mean": 0.661733,
+    "roc_auc_delta_mean": 0.007524
+  },
+  "elapsed_s": 172.1
+}

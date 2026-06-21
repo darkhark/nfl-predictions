@@ -121,6 +121,15 @@ class MyTestCase(unittest.TestCase):
                 continue
             self.assertEqual(before.values[0], after.values[0])
 
+    def test_madden_columns_present_and_paired(self):
+        cols = self.all_data.columns
+        self.assertIn('target_madden_qb_ovr', cols)
+        self.assertIn('opp_madden_qb_ovr', cols)
+        self.assertIn('madden_matchup_pass_pro', cols)
+        # target QB overall should be a plausible Madden value where present
+        vals = self.all_data['target_madden_qb_ovr'].dropna()
+        self.assertTrue(vals.between(40, 99).all())
+
     def _get_stats_columns(self):
         stats_data_cols = [col for col in self.before_shift_df.columns if 'target' in col or 'opp' in col]
         cols_not_stats = [

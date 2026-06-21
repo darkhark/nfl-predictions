@@ -36,7 +36,16 @@ schedule_and_weekly_df = schedule_and_weekly_df[
 ]
 
 # %%
-# Remove any records where game_type != 'REG'
+# Remove any records where game_type != 'REG'.
+# NOTE ON ORDERING: this filter runs AFTER the one-week leakage shift inside
+# get_schedule_and_weekly_data (collect_all._shift_data). So postseason rows are present
+# during the shift and only dropped here. The effect is that a regular-season week-1 row
+# inherits the team's last PRIOR game including playoffs -- their final playoff game if they
+# made the postseason, otherwise their regular-season finale -- rather than starting fresh.
+# The postseason rows themselves are removed below, but the stats they shifted forward into
+# the surviving week-1 REG rows stay. Every season opener from 2004 on carries these values;
+# only 2003 week-1 (dropped above) is truly empty. To make season openers start fresh, group
+# the shift by season and apply this REG filter before the shift. See _shift_data's docstring.
 schedule_and_weekly_df = schedule_and_weekly_df[schedule_and_weekly_df['game_type'] == 'REG']
 schedule_and_weekly_df.drop(columns=['game_type', 'season_type'], inplace=True)
 

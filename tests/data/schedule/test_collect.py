@@ -180,5 +180,45 @@ class MyTestCase(unittest.TestCase):
         self.assertTrue(la_rams['indoor'].all())
 
 
+class TestScheduleRecency(unittest.TestCase):
+
+    def test_ewma_rolling_avg_score(self):
+        import pandas as pd
+        team_df = pd.DataFrame({
+            'team': ['AAA'] * 4, 'season': [2023] * 4, 'week': [1, 2, 3, 4],
+            'score': [10.0, 20.0, 30.0, 40.0],
+        })
+        out = collect._calculate_cumulative_avg_score(team_df, offense=True)
+        s = pd.Series([10.0, 20.0, 30.0, 40.0])
+        self.assertTrue((abs(out['ewma_avg_score'].to_numpy()
+                             - s.ewm(halflife=3, adjust=True).mean().to_numpy()) < 1e-9).all())
+        self.assertTrue((abs(out['rolling_avg_score'].to_numpy()
+                             - s.rolling(4, min_periods=1).mean().to_numpy()) < 1e-9).all())
+
+    def test_recency_columns_get_ranked(self):
+        import pandas as pd
+        team_df = pd.DataFrame({
+            'team': ['AAA'] * 4, 'season': [2023] * 4, 'week': [1, 2, 3, 4],
+            'score': [10.0, 20.0, 30.0, 40.0],
+        })
+        out = collect._calculate_cumulative_avg_score(team_df, offense=True)
+        self.assertIn('ewma_avg_score_rank', out.columns)
+        self.assertIn('rolling_avg_score_rank_change', out.columns)
+
+
+class TestScheduleRecencyMerge(unittest.TestCase):
+    def setUp(self):
+        self.schedule_data = collect.get_schedule_data([2022, 2023])
+
+    def test_merged_frame_has_recency_families(self):
+        for col in (
+            'home_off_ewma_avg_score', 'away_off_ewma_avg_score',
+            'home_off_rolling_avg_score', 'away_off_rolling_avg_score',
+            'home_def_ewma_avg_points_allowed', 'home_def_rolling_avg_points_allowed',
+            'home_off_ewma_avg_score_rank', 'home_off_rolling_avg_score_rank_change',
+        ):
+            self.assertIn(col, self.schedule_data.columns)
+
+
 if __name__ == '__main__':
     unittest.main()

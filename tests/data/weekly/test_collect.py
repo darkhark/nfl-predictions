@@ -194,5 +194,51 @@ class TestLoadWeeklyYear(unittest.TestCase):
         self.assertNotIn('dakota', collect.ONLY_NON_IDENTIFIER_COLUMNS)
 
 
+class TestWeeklyRecency(unittest.TestCase):
+
+    def _frame(self):
+        # one team, one season, 5 games, ascending team_game_count; a single stat column
+        # from ONLY_NON_IDENTIFIER_COLUMNS[5:] to exercise the loop.
+        import pandas as pd
+        stat = collect.ONLY_NON_IDENTIFIER_COLUMNS[5]
+        rows = []
+        for i, val in enumerate([10.0, 20.0, 30.0, 40.0, 50.0], start=1):
+            r = {c: 0 for c in collect.ONLY_NON_IDENTIFIER_COLUMNS}
+            r.update({'team': 'AAA', 'opp_team': 'BBB', 'season': 2023, 'week': i,
+                      'team_game_count': i, 'opp_game_count': i, stat: val})
+            rows.append(r)
+        return pd.DataFrame(rows), stat
+
+    def test_ewma_and_rolling_match_pandas(self):
+        import pandas as pd
+        df, stat = self._frame()
+        out = collect.create_cumulative_columns(df, ['team', 'season'], 'off', 'team_game_count')
+        s = pd.Series([10.0, 20.0, 30.0, 40.0, 50.0])
+        expected_ewma = s.ewm(halflife=3, adjust=True).mean().to_numpy()
+        expected_roll = s.rolling(4, min_periods=1).mean().to_numpy()
+        self.assertTrue(
+            (abs(out[f'off_{stat}_ewma_average'].to_numpy() - expected_ewma) < 1e-9).all())
+        self.assertTrue(
+            (abs(out[f'off_{stat}_rolling_average'].to_numpy() - expected_roll) < 1e-9).all())
+
+    def test_recency_resets_across_seasons(self):
+        import pandas as pd
+        df, stat = self._frame()
+        df2 = df.copy(); df2['season'] = 2024; df2['team_game_count'] = range(1, 6)
+        both = pd.concat([df, df2], ignore_index=True)
+        out = collect.create_cumulative_columns(both, ['team', 'season'], 'off', 'team_game_count')
+        # 2024 game 1 ewma == its own value (no carryover from 2023)
+        first_2024 = out[(out['season'] == 2024)].sort_values('team_game_count').iloc[0]
+        self.assertAlmostEqual(first_2024[f'off_{stat}_ewma_average'], 10.0)
+
+    def test_recency_columns_get_ranked(self):
+        import pandas as pd
+        df, stat = self._frame()
+        out = collect.create_cumulative_columns(df, ['team', 'season'], 'off', 'team_game_count')
+        out = collect.add_rank_columns(out)
+        self.assertIn(f'off_{stat}_ewma_average_rank', out.columns)
+        self.assertIn(f'off_{stat}_rolling_average_rank_change', out.columns)
+
+
 if __name__ == '__main__':
     unittest.main()

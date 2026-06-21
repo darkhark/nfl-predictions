@@ -112,5 +112,8 @@ coverage.xml
 # Virtual Environments (use requirements.txt instead)
 venv/
 
+# Regenerable model input (215MB, >GitHub limit) — rebuild via scripts/data_assembly/predict_game_winner/schedule_and_weekly.py
+data/predict_games/input_data/schedule_and_weekly.parquet
+
 # Bayesian-logistic full posterior traces (hundreds of MB, regenerable via the script)
 data/predict_games/bayes_logistic/*.nc

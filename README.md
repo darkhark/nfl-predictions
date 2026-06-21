@@ -78,6 +78,13 @@ Reusable, model-agnostic-ish components built around XGBoost:
   including grouped and known-factor variants.
 - **Anomaly scoring** (`models/xgb/anomaly_score/score.py`): per-column XGBRegressor
   residual scoring to flag unusual feature values during data validation.
+- **Feature-group ablation** (`feature_groups/`): partitions the candidate pool into
+  mutually-exclusive content families and runs the full 2^G subset sweep over
+  season-blocked rolling-origin CV, decomposing skill into per-group **Shapley main
+  effects** and **pairwise Shapley interaction indices** (estimator-agnostic, with
+  XGBoost/BART fold scorers). Answers "which families work together?" *directly* instead
+  of inferring it from add-one-family runs — see the
+  [feature-group ablation result](#feature-group-ablation-are-the-feature-families-complementary-or-redundant).
 
 ## Project structure
 
@@ -167,6 +174,22 @@ metrics are tracked:
 | 8 | 2026-06-12 | **BART** re-trained on the run-7 play-by-play feature set (corrected — see run 8 note) | 45 | 0.702 | 0.656 | 0.2199 |
 | 9 | 2026-06-12 | Rank-only + **Phase 2 directional run/pass features**, XGBoost | 57 | 0.694 | 0.645 | 0.2291 |
 | 10 | 2026-06-12 | **BART** on the run-9 directional feature set | 57 | **0.708** | 0.654 | **0.2185** |
+| 11 | 2026-06-12 | Rank-only + **Phase 3 features** (trenches, luck, tendencies, penalties, pace), XGBoost | 51 | **0.707** | 0.649 | 0.2206 |
+| 12 | 2026-06-12 | **BART** on the run-11 Phase 3 feature set | 51 | 0.699 | 0.651 | 0.2207 |
+| 13 | 2026-06-12 | Extended RFE (30 iter, curve collapses at ~15), tolerance rule picks 17, XGBoost | 17 | 0.688 | 0.632 | 0.2231 |
+| 14 | 2026-06-13 | **BART backward-elimination** on BART's own `variable_inclusion` (peak at 32), BART | 32 | 0.705 | 0.658 | 0.2190 |
+| 15 | 2026-06-16 | **Full set (rank + aggregated)** — `RANK_ONLY=False`, ~2,349-col pool, XGBoost | 31 | 0.698 | 0.639 | 0.2204 |
+| 16 | 2026-06-16 | **BART** on the full-set pool (148-feature pre-filter; validation peak 119) | 119 | 0.699 | 0.645 | 0.2213 |
+| 17 | 2026-06-17 | **Brier + 1-SE selection** (vs AUROC + 0.005 tol), rank-only, XGBoost | 25 | 0.700 | 0.645 | 0.2200 |
+| 18 | 2026-06-17 | **Brier + 1-SE selection**, full set, XGBoost | 55 | 0.698 | 0.649 | 0.2205 |
+| 19 | 2026-06-17 | **Brier + 1-SE selection**, rank-only, BART | 26 | 0.703 | 0.646 | **0.2192** |
+| 20 | 2026-06-17 | **Brier + 1-SE selection**, full set, BART | 62 | 0.697 | 0.642 | 0.2207 |
+| 21 | 2026-06-17 | **Situational play-call** (down×distance tendency + play-type-split execution + snap-share), rank-only, XGBoost | 24 | 0.697 | 0.638 | 0.2209 |
+| 22 | 2026-06-17 | **BART** on the situational rank-only pool | 61 | 0.696 | 0.649 | 0.2209 |
+| 23 | 2026-06-17 | **Recency** (EWMA halflife 3 + rolling 4, every cumulative-average stat), rank-only, XGBoost | 36 | 0.693 | 0.627 | 0.2321 |
+| 24 | 2026-06-17 | **BART** on the recency rank-only pool | 58 | 0.691 | 0.633 | 0.2223 |
+| 25 | 2026-06-18 | **Madden ratings** (player overall ratings injected as team-week features), rank-only, base-vs-madden ablation (all groups vs all − madden) | 6160→6348 | +0.0075 delta | — | −0.0016 delta |
+| 26 | 2026-06-19 | **Madden ratings, `_ovr` z-scored within season** (removes cross-era ratings drift; diffs kept raw-point), same base-vs-madden ablation | 6160→6348 | **+0.0129 delta** | — | **−0.0034 delta** |
 | 27 | 2026-06-20 | **Bayesian logistic regression** (PyMC, weakly-informative `Normal(0,1)` prior), same 54 features / split as run 6 | 54 | 0.695 | 0.657 | 0.2208 |
 
 **What changed between runs**
@@ -284,7 +307,186 @@ metrics are tracked:
   > 0.2185) — treat BART numbers as carrying roughly ±0.004 run-to-run wobble. Both
   > executions beat run 6 on ROC-AUC and Brier, so the directional improvement is
   > robust to sampler noise; the table keeps the first recorded execution.
-- **Run 10 → 27 (classic parametric Bayesian baseline):** added a **Bayesian logistic
+- **Run 10 → 11:** added **Phase 3 features** — sack/QB-hit/stuff rates, fumble-recovery
+  luck, CPOE, YAC over expected, accepted-penalty rates (committed and drawn), and
+  tendency/pace metrics (scramble/shotgun/no-huddle rates, seconds per play), all per wp
+  context and side (504 candidate columns; rank-only pool 1,193 → 1,528). RFE selected
+  **51 features — 24 play-by-play (10 Phase 3, 14 directional)**, with trench features
+  prominent (sack rates on both sides, garbage-time stuff rate) plus fumble-recovery
+  luck and pace tendencies. **XGBoost finally moved: pooled hold-out ROC-AUC 0.707**
+  (vs 0.694–0.697 in runs 5/7/9 — first escape from that band in five feature
+  generations), accuracy 0.649, Brier 0.2206 (recovered from run 9's 0.2291). The
+  trench/luck family appears to carry signal the box score and the earlier pbp families
+  did not.
+- **Run 11 → 12:** BART on the same 51-feature Phase 3 set came back **0.699 / 0.651 /
+  Brier 0.2207 — below its run-10 result** (0.708 / 0.654 / 0.2185) by more than the
+  ~±0.004 sampler wobble. An instructive reversal: the feature set that finally moved
+  XGBoost *hurt* BART, plausibly because RFE selects with XGBoost importances — the
+  estimators disagree about which correlated rank families they can exploit.
+  **The champion remains run 10's BART on the 57-feature directional set**; run 11's
+  XGBoost (0.707/0.2206) is now a close second. Width-stratified Brier stayed strictly
+  monotone (0.174 → 0.250), so run 12's posterior uncertainty remains trustworthy even
+  at its lower skill. Open question for a future run: estimator-specific feature
+  selection (RFE with BART importances, or BART on the run-9 57-set ∪ Phase 3 trench
+  picks).
+- **Run 12 → 13:** extended RFE from 20 to 30 and then 40 iterations so the CV curve
+  actually collapses instead of stopping while flat. The full descent (down to 2
+  features): CV AUROC peaks at **0.6835 with 32 features**, holds above 0.67 through
+  13, breaks at 11 (0.659), and slides to 0.569 at 2 — so the usable range is roughly
+  13–60 features with a peak at 32, and single-digit sets are ruled out by CV alone. The established tolerance
+  rule (smallest set within .005 of best) therefore picked **17 features** — but the
+  hold-out disagreed sharply: 0.688 / 0.632 / Brier 0.2231, well below run 11's
+  51-feature model (0.707/0.649/0.2206). **Methodology lesson:** when the RFE curve is
+  flat across a wide range, CV cannot distinguish set sizes and "smallest within
+  tolerance" over-shrinks — small sets carry hold-out variance that CV doesn't price.
+  Future selections should prefer the CV-peak count (or a 1-SE-style rule) over
+  aggressive minimalism. 9 of the 17 survivors were play-by-play features (4 Phase 3,
+  3 directional, 2 Phase 1), consistent with the pbp families carrying real signal.
+- **Run 13 → 14:** estimator-specific selection at last — `BartBackwardElimination`
+  (`data_science_utilities/models/bart/`) drives elimination by BART's OWN
+  `variable_inclusion`, re-measured every iteration, with six parallel seed-replicate
+  fits to tame PGBART noise (the replicate spread was ~0.007 per iteration; averaging
+  six cuts it to ~0.003). Starting from a generous 91-feature pre-filter and selecting
+  by the validation-curve peak (the run-13 lesson), **BART's curve peaks at 32
+  features** — the *exact* count XGBoost's CV curve peaked at, reached by a completely
+  different mechanism (gain-RFE vs inclusion backward-elimination). The two 32-sets
+  overlap only 17/32, though: same dimensionality, different composition — and BART's
+  leans far more on box-score/aggregate ranks (23 of 32) than XGBoost's pbp-heavy set.
+  Hold-out: **ROC-AUC 0.705, accuracy 0.658, Brier 0.2190.** This decisively beats
+  run 12 (BART on the XGBoost-selected 51-set: 0.699 / 0.2207), confirming that run-12's
+  regression was largely a selection-mismatch artifact — giving BART features chosen by
+  BART recovers it. It also essentially ties the run-10 champion (0.708 / 0.2185) within
+  PGBART's ~±0.004 wobble, but with **25 fewer features** — the more parsimonious model
+  for the same skill. Width-stratified Brier is monotone except a minor q3/widest
+  inversion at the noisy tail (0.167 / 0.218 / 0.248 / 0.243). Takeaway: ~32 features is
+  a real signal core both estimators find independently; estimator-matched selection
+  matters for BART; and we are firmly on a ~0.705–0.708 / ~0.219 Brier plateau that five
+  feature generations and two estimators have not broken — the ceiling now looks like a
+  data/regime limit, not a feature-engineering one.
+- **Run 14 → 15/16 (full ranked + aggregated set):** tested whether adding the aggregated
+  cumulative-average / sum / delta columns *back* alongside the ranks helps — `RANK_ONLY =
+  False`, a **~2,349-column pool vs rank-only's 1,529** (the extra ~820 are the continuous
+  aggregated *values* the rank-only experiment had dropped as collinear with their ranks).
+  XGBoost RFE on the full pool selected **31 features (CV peak), hold-out 0.698**; BART
+  backward-elimination on a generous 148-feature pre-filter peaked at **119 features,
+  hold-out 0.699** (a cheaper 49-feature pre-filter gave 0.698 at 40 features — consistent).
+  **All three cluster at 0.698–0.699, ~0.006–0.008 below the rank-only champions** (XGBoost
+  run 11 0.707, BART run 14 0.705) — no lift. What *did* change is composition: with the
+  aggregated columns available the two estimators disagree sharply (BART's 40-feature set
+  overlaps XGBoost's 31 by only 25, **Jaccard 0.54**), and **10 of BART's 15 unique picks
+  are uncorrelated (<0.5) to anything XGBoost chose** — genuinely different signal, not
+  correlated substitutes — yet hold-out is identical. This is the strongest form of the
+  long-running crowding-out result: the aggregated values carry **no incremental hold-out
+  signal beyond their ranks**, for either estimator, so rank-only stays the default.
+  > Process notes: the null isn't a pre-filter artifact — BART's validation peak sat at 119
+  > of its 148-feature pool (it keeps most of what it's given) and the 49→148 pool change
+  > moved hold-out only +0.001. Also, an 86-feature BART attempt looked "intractable" only
+  > because the laptop slept on battery; on AC each BART fit is ~3 min regardless of 49 vs
+  > 148 features (BART cost here is dominated by MCMC sampling, not the split search).
+  > Reproduce: `RANK_ONLY = False` in `cross_validation/rfe.ipynb` (writes
+  > `rfe_features_kfolds_full.csv`); `cross_validation/grid_search.ipynb` with
+  > `SELECTED_RFE_CSV = 'rfe_features_kfolds_full.csv'`, `BEST_NUM_FEATS = 31`;
+  > `cross_validation/bart_rfe.ipynb` with `START_POOL_SIZE = 148`.
+- **Runs 17–20 (Brier + 1-SE selection):** switched the selection objective from ROC-AUC
+  (a pure *ranking* metric, blind to calibration) to **Brier** (a proper scoring rule that
+  rewards calibration + sharpness), and replaced XGBoost's smallest-within-0.005-tolerance
+  rule and BART's pure-peak with a shared, direction-aware **1-SE rule** (most parsimonious
+  set within one standard error of the best). The metric is now a single configurable
+  `SELECTION_METRIC` knob in all three notebooks (`'brier'` default; `'roc_auc'` /
+  `'log_loss'` switchable), and the XGBoost RFE class gained a `brier` metric + per-fold
+  storage + `get_best_num_features_1se()`, BART a `get_best_features_1se()` (all unit-tested).
+  Result: **the plateau is metric-robust.** All four runs land at ~0.697–0.703 ROC-AUC /
+  0.2192–0.2207 Brier — statistically indistinguishable from the AUROC-selected models, just
+  often more parsimonious (BART rank-only: 26 features vs run-14's 32). The best Brier of the
+  four, **run 19 (BART rank-only, 0.2192)**, ties the AUROC-selected run-14 BART (0.2190) and
+  does not reach run-10's 0.2185 — i.e. selecting *for* calibration did not buy measurably
+  better calibration. The full-set runs (18, 20) again trail their rank-only counterparts on
+  Brier (0.2205 / 0.2207), consistent with the run-15/16 null on aggregated features.
+  > BART-SE caveat: BART's RFE has no cross-validation, so its 1-SE band uses the spread of
+  > the 6 sampler-seed replicates — that captures sampler noise (~0.003), not generalization
+  > variance, making the band tight (near-peak). The validation Brier curve is also extremely
+  > flat (run 19: 0.2297–0.2319 across 91→10 features), so the *count* is only loosely
+  > determined; what RFE mainly fixes here is the feature *composition* (via the inclusion
+  > ranking), not a sharp elbow. Reproduce: set `SELECTION_METRIC = 'brier'` in the three
+  > `cross_validation/` notebooks; artifacts are suffixed `_brier`.
+- **Runs 21–22 (situational play-call features):** added a down×distance play-call family —
+  pass/run **tendency** by down (1st; 2nd/3rd × short ≤2 / medium 3–6 / long 7+) and
+  goal-to-go, **execution split by play type** (`success`/3rd-down `conversion` *on passes*
+  vs *on runs*), plus a **wp-context snap-share** family (how often a team's games are
+  competitive vs blowouts) — all × 3 contexts × 4 perspectives. Candidate pool grew
+  2,349 → 3,249 (+900); new raw columns `ydstogo`/`goal_to_go`; era-safe; unit-tested
+  (`src/data/play_by_play/collect.py`). **Both estimators select these features heavily** —
+  XGBoost kept **6 of 24** at the 1-SE point, BART **18 of 61** (30%; it especially liked the
+  snap-share garbage-time shares and the 3rd-and-short conversion-by-play-type splits) — a far
+  higher survival rate than the run-15 aggregated-values null, so they carry real CV signal.
+  **But neither moved the hold-out:** XGBoost 0.6966 / 0.2209 (vs run-17 rank-only-no-situational
+  0.7005 / 0.2200) and BART 0.6965 / 0.2209 (vs run-19 0.7030 / 0.2192) — both marginally *below*
+  their no-situational baselines, and below the 0.705–0.708 champions. Interpretation: the
+  situational signal is real in-sample but redundant-for-prediction at the team-week-rank grain
+  (selected as substitutes, not additive), and/or the 544-game two-season hold-out is too small
+  to resolve it. **Six feature generations and two estimators have now held the
+  ~0.705 / ~0.219 plateau** — strong evidence the ceiling is a data/regime limit, not a
+  feature-engineering one; the next lever is market signal, not more box/PBP families.
+  > Repro note: feature code is on `extend-rfe-and-bart-rfe`; regenerate caches with
+  > `get_play_by_play_data(range(2003,2026), refresh=True)` then rebuild via
+  > `scripts/data_assembly/predict_game_winner/schedule_and_weekly.py`. The BART run can hit an
+  > intermittent PyTensor compile-cache race on its first parallel iteration (`AssertionError`
+  > in `cmodule.py`); a re-run on the now-warm cache clears it.
+- **Runs 23–24 (recency: EWMA + rolling):** the one remaining non-market lever — a new
+  *temporal* axis. Added EWMA (halflife 3) and rolling (last 4) versions of **every**
+  cumulative-average stat (weekly box, schedule points, PBP rates) *alongside* the season
+  averages, each ranked, so RFE picks form-vs-season-average per stat (pool 3,249 → 9,297;
+  rank-only 2,129 → 6,161; the 215 MB regenerated parquet is now gitignored). **Recency is the
+  most CV-attractive family of the whole project — both estimators select it at ~50%** (XGBoost
+  18/36, BART 29/58) — yet it is the only family that **actively degrades the hold-out**:
+  XGBoost **0.693 / 0.2321** (vs no-recency run-21 0.6966 / 0.2209), BART **0.691 / 0.2223**
+  (vs run-22 0.6965 / 0.2209) — the worst Brier of any rank-only run, on *both* estimators.
+  Interpretation: recency-weighting trades bias for **variance** (small effective sample), so
+  recent form looks predictive in CV but chases noise that doesn't generalize on the 544-game
+  hold-out. **The non-market feature levers are now exhausted** — aggregated values (runs
+  15/16, null), situational play-call (runs 21/22, null), recency (runs 23/24, negative), and
+  matchup-diffs (dropped as redundant with ranks). Across **seven feature generations and two
+  estimators** the ~0.705 / ~0.219 ceiling has not moved; it is a data/regime limit. The only
+  untried lever is **market signal** (de-vigged moneyline-implied probability as a feature and
+  baseline), deferred by choice.
+  > Repro: `SELECTION_METRIC = 'brier'` in the `cross_validation/` notebooks on the
+  > `recency-ewma-features` branch; rebuild the dataset via the assembly script (recency is
+  > derived post-cache — no PBP re-download).
+- **Run 25 (Madden ratings, base-vs-madden targeted ablation, 2026-06-18):** injected
+  Madden player overall ratings as team-week features: per-slot individual ratings
+  (QB, RB, TE, WR1/2/3, LT/LG/C/RG/RT, edge left/right), group means (backfield,
+  receivers, interior/exterior OL, edge, interior DL, linebackers, cornerbacks, safeties),
+  within-season diffs (prev game, 4-game), season-over-season diffs, and target-vs-opp
+  matchup deltas (pass-pro edge, interior, skill-cover, pass-rush) — 188 madden columns,
+  classified as the `madden_ratings` content family. Coverage: 69–78% non-null on _ovr
+  columns in 2009–2024; 0% in 2025 (new nflverse depth-chart schema breaks starter lookup).
+  **Targeted ablation (all 7 groups vs all 7 − madden_ratings, rank-only XGBoost, 7 folds
+  2019–2025):** mean Brier 0.2283 (with) vs 0.2299 (without), **delta −0.0016 (madden
+  helps)**; mean ROC-AUC 0.6693 (with) vs 0.6617 (without), **delta +0.0075**.
+  6/7 folds positive on Brier, 6/7 positive on ROC-AUC. **Madden ratings add a consistent
+  but modest signal** on this untuned fixed-model scorer — they are the first non-market
+  data source in this project to produce a reliably positive Brier delta across folds.
+  Note: these are *untuned* XGBoost scores on the ablation metric, not the tuned hold-out
+  table scores; the actual hold-out improvement after RFE may be larger, smaller, or null
+  (RFE may not select the same madden columns that are carrying the signal).
+  > Repro: `conda run -n nfl-predictions python scripts/experiments/madden_ablation.py`
+  > on the `madden-ratings-features` branch; artifacts in
+  > `data/predict_games/group_ablation/madden_ablation.json`.
+
+- **Run 26 (Madden ratings, `_ovr` z-scored within season, 2026-06-19):** the raw Madden
+  overalls carry a real **cross-era scale drift** (league-mean overall ≈ 84 in 2004–08 vs
+  ≈ 77 recently), so the absolute level means different things across eras while the model
+  trains across all of them. Fix: z-score each `_ovr` *level* within season (mean 0, std 1);
+  the `_diff_*` columns are left as raw overall points (differences are already era-invariant).
+  **Same targeted ablation:** ROC-AUC delta **+0.0075 → +0.0129** (Madden lift +72%), Brier
+  delta **−0.0016 → −0.0034** (≈2×); still 6/7 folds positive, and **2021 flipped from
+  hurting (−0.0087) to helping (+0.0087)**. The only non-helping fold is 2025 (no Madden
+  starter data — nflverse depth-chart schema change). Removing the era drift roughly doubled
+  the signal — strong evidence the level non-stationarity, not the talent signal, was the
+  limiter. Same untuned-scorer caveat as Run 25 applies.
+  > Both results on disk: `madden_ablation_raw.json` (Run 25) and
+  > `madden_ablation_zscore.json` (Run 26) under `data/predict_games/group_ablation/`.
+- **Run 27 (classic parametric Bayesian baseline, 2026-06-20):** added a **Bayesian logistic
   regression** (PyMC 5, NUTS) as a linear counterpoint to BART, trained and evaluated on the
   *identical* protocol as run 6 — same parquet, seed-32 shuffle, frozen **54-feature** run-6
   set, train `<2022` / 2024+2025 hold-out, per-row metrics. Features are median-imputed
@@ -298,36 +500,104 @@ metrics are tracked:
     **strictly monotone** — **0.174 / 0.220 / 0.233 / 0.256** from narrowest to widest
     posterior quartile — so the per-row predictive uncertainty is trustworthy, and the
     coefficients are interpretable and correctly signed (home field **+0.30** on the logit
-    is the single largest effect; offensive/defensive scoring ranks follow with the expected
-    signs).
+    is the single largest effect).
   - **Regularized horseshoe (excluded):** failed to converge — **2,062 divergences, R-hat
     1.53, ESS ≈ 7** at `target_accept=0.95`. Its 0.649 hold-out number is **not trustworthy**
-    and is reported only as a diagnostics failure: the horseshoe's funnel geometry is hard
-    for NUTS on these 54 correlated rank features, and a reparameterization (or much higher
+    and is reported only as a diagnostics failure; a reparameterization (or much higher
     `target_accept` / longer tuning) would be needed. The trace is saved for inspection.
   - **Verdict — competitive-adjacent, but the trees still win.** On identical inputs the
     linear Bayesian model lands **~1 ROC-AUC point below** BART run 6 (0.705) and run 10
     (0.708) and the best XGBoost (run 11, 0.707). The gap is consistent with the
     linear-additivity assumption — a GLM cannot represent the feature interactions the trees
-    split on. The model's distinguishing value is its **well-calibrated, monotone
-    uncertainty** and its **transparent coefficients**, and its saved posterior is the
-    foundation for the planned weekly-Madden transfer-learning update. Reproduce with
+    split on. Its distinguishing value is **well-calibrated, monotone uncertainty** and
+    **transparent coefficients**, and its saved `Normal(0,1)` posterior is the foundation for
+    the planned weekly-Madden transfer-learning update. Reproduce with
     `python scripts/experiments/bayes_logistic.py` (~5 min, seed 32); artifacts land in
     `data/predict_games/bayes_logistic/` (the multi-hundred-MB `.nc` traces are git-ignored;
     the compact `coef_summary_*.json` files are the committed transfer-learning surface).
-  > Branch note: runs **11–26** (play-by-play phases, 1-SE selection, situational/recency
-  > features, and the Madden-ratings ablations) were developed on the
-  > `madden-ratings-features` branch and are not in this branch's table — this entry
-  > continues the global run sequence and becomes contiguous once those merge to master. The
-  > on-branch comparison anchor is **run 6** (BART, 0.705, the identical 54 features).
+
+## Feature-group ablation: are the feature families complementary or redundant?
+
+Runs 5–24 add one feature *family* at a time and let RFE pick columns, which can only
+*infer* redundancy run-by-run (a family is selected heavily yet the hold-out doesn't move).
+A dedicated harness (`data_science_utilities/feature_groups/`) measures it directly: it
+partitions the ~9,297-column pool into mutually-exclusive **content families**, scores the
+**full 2^G subset sweep** with a *fixed, untuned* regularised XGBoost per subset (no
+per-subset RFE/tuning, so the *group* effect is isolated from the *selection* effect),
+evaluates on **season-blocked rolling-origin CV** (test = each of 2019–2025; the two prior
+seasons are the early-stopping window), and decomposes skill into per-group **Shapley main
+effects** and **pairwise Shapley interaction indices**.
+
+The 2026-06-17 run swept the **7 families present at that time** — `box_score`,
+`schedule_points`, `pbp_phase1/2/3`, `situational_playcall`, `snap_share` — over
+`context_rest` as an always-on base (128 subsets × 7 folds = **896 fits**, Brier). These
+numbers are rolling-origin CV on an *untuned* model and are **NOT comparable to the tuned
+hold-out table above — read the deltas between subsets, not the absolute level.**
+
+The 2026-06-18 run (Run 25 / `madden-ratings-features` branch) introduced an **8th family —
+`madden_ratings`** (188 columns, player Madden overall ratings as team-week features).
+Rather than re-run the full 2^8 = 256-subset sweep (~60 min), a targeted base-vs-madden
+comparison was run directly: full-8-group score vs full-7-group (madden excluded) over the
+same 7 folds. **Result: madden_ratings reduces mean Brier by 0.0016 (positive) and increases
+mean AUROC by 0.0075 (positive); 6/7 folds agree on both metrics.** See Run 25 note above for
+detail. Unlike the 7 original families which are all sub-additive with each other, madden
+ratings add a *complementary* signal not already captured by box/pbp/schedule families —
+suggesting player quality is a partially orthogonal dimension to team-game performance.
+
+- **Every one of the 21 pairwise interactions is negative (sub-additive); zero are
+  positive.** No pair of families complements another. Most sub-additive:
+  `box_score + pbp_phase1` (−0.0040); least: `pbp_phase2_directional + pbp_phase3` (−0.0024).
+- **Standalone vs leave-one-out is the redundancy fingerprint.** Each family lowers Brier by
+  ~0.016–0.022 *on its own*, but each family's *marginal* value once the other six are
+  present is ≈ 0 (several slightly negative) — a redundancy of ~0.018–0.021 for **all
+  seven**. They are mutually interchangeable carriers of the same signal.
+- **Parsimony beats the kitchen sink.** Base-only (8 context cols) Brier 0.2507 → best single
+  family ~0.231–0.234 → the best subset is just **3 families**
+  (`box_score + pbp_phase1 + schedule_points`, 0.2273); the best overall is a 4-family set
+  (0.2271). The **full 7-family set (0.2299) ranks only 72/128** — adding families past the
+  first ~3 is mildly *worse*, not better. ~80% of the achievable improvement comes from the
+  first family added.
+- Shapley main effects are all small and similar (+0.0019 to +0.0046), with `pbp_phase1` the
+  largest individually.
+
+This is the crowding-out the experiment log inferred for seven feature generations, now
+measured directly across all families at once: the box/pbp/schedule families are **tapped
+out**. **Caveats:** on a metric sitting at the documented ~0.219-Brier plateau, a negative
+interaction is consistent with *both* genuine informational redundancy *and* metric-ceiling
+saturation — the index cannot separate them (corroborate with feature correlations or
+re-run in log-loss space); and the cross-fold SE is a *lower bound*, because the
+expanding-window folds share nested training data and overlapping validation windows.
+**Implication:** the only sources likely to carry *orthogonal* signal are the two **not yet
+in the pool** — **market** (de-vigged odds; the `schedule` collector supports
+`keep_odds=True`) and **Next Gen Stats** (player-tracking metrics; collected but not
+integrated, and blocked on the season-average `_diff` leakage fix plus team-week
+aggregation). Reproduce: `cross_validation/group_ablation.ipynb` or
+`cross_validation/run_group_ablation.py`; artifacts in `data/predict_games/group_ablation/`.
+
+**Madden ratings (Run 25, `madden_ratings` family):** unlike the original 7 families,
+Madden adds a *genuinely complementary* signal (Brier −0.0016, ROC-AUC +0.0075, 6/7 folds
+positive). The targeted ablation indicates player Madden ratings capture something the
+box/pbp/schedule metrics miss — plausibly pre-season talent assessments that are orthogonal
+to in-season form. The full Shapley decomposition with all 8 families is pending (256-subset
+× 7-fold sweep, ~60 min on a laptop).
 
 ## Roadmap
 
-- Improve predictive performance toward / past a Vegas-implied baseline.
-- Play-by-play Phase 3 (trenches, turnover luck, tendencies — see the spec in
-  `docs/superpowers/specs/` and phase plans in `docs/superpowers/plans/`) and Next Gen
-  Stats integration at the weekly grain; calibration pass on the run-10 BART champion
-  (best AUROC/Brier but 0.5-threshold accuracy lags — calibration may recover it).
+- Improve predictive performance toward / past a Vegas-implied baseline. Five feature
+  generations (runs 5–14) across two estimators have plateaued at ~0.705–0.708 ROC-AUC /
+  ~0.219 Brier, and the [feature-group ablation](#feature-group-ablation-are-the-feature-families-complementary-or-redundant)
+  now confirms quantitatively that all seven in-dataset families are mutually redundant.
+  So the priority is the two **untapped data sources** that might carry orthogonal signal:
+  **market** (de-vigged moneyline-implied probabilities — ≈ a `keep_odds=True` reassembly,
+  the `schedule` collector already supports it) and **Next Gen Stats** (needs the `_diff`
+  leakage fix and team-week aggregation below before it can join as a family), rather than
+  more box/pbp features.
+- Calibration pass on the run-10 / run-14 BART models (best AUROC/Brier but 0.5-threshold
+  accuracy lags — calibration may recover it) and Next Gen Stats integration at the
+  weekly grain.
+- Faster estimator-matched selection (run 14 follow-up): a cheap 1–2-replicate BART
+  backward pass for the ranking + curve shape, then a fully-parallel multi-replicate
+  size-sweep in the ~24–45 promising region, instead of replicating every step.
 - Extend the Bayesian comparison: the BART baseline (run 6) and a **parametric Bayesian
   logistic regression** (run 27) are both done. Next: fix the regularized-horseshoe
   convergence (reparameterize / raise `target_accept`), and build the weekly-Madden
