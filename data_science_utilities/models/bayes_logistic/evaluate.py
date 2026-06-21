@@ -37,6 +37,7 @@ def reliability_curve(y_true, preds, n_bins=10):
 
 
 def width_stratified_brier(y_true, preds, preds_std, n_quartiles=4):
+    """Brier within posterior-std quartiles (only n_quartiles<=4 is supported: the label list has 4 entries)."""
     df = pd.DataFrame(
         {"y": np.asarray(y_true), "p": np.asarray(preds), "std": np.asarray(preds_std)}
     )
@@ -61,4 +62,9 @@ def evaluate(y_true, preds, p_std=None, weeks=None):
             str(k): float(v)
             for k, v in width_stratified_brier(y_true, preds, p_std).items()
         }
+    prob_true, prob_pred = reliability_curve(y_true, preds)
+    res["reliability_curve"] = {
+        "prob_true": [float(v) for v in prob_true],
+        "prob_pred": [float(v) for v in prob_pred],
+    }
     return res

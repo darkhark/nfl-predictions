@@ -52,4 +52,5 @@ class TestMetrics(unittest.TestCase):
         res = evaluate.evaluate(self.y, self.p, p_std=p_std, weeks=weeks)
         for k in ["auroc", "accuracy", "brier", "logloss", "per_week_auroc_mean"]:
             self.assertIn(k, res)
+        self.assertIn("reliability_curve", res)
         self.assertIsInstance(res["auroc"], float)

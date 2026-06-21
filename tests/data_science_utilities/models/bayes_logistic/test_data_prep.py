@@ -103,6 +103,7 @@ class TestLoadAndSplit(unittest.TestCase):
         self.assertTrue((split.holdout["season"] >= 2024).all())
         # every row lands in exactly one fold
         self.assertEqual(len(split.train) + len(split.valid) + len(split.holdout), len(df))
+        self.assertTrue(len(split.train) and len(split.valid) and len(split.holdout))
 
     def test_seed_is_reproducible(self):
         df = _synthetic_seasons()
