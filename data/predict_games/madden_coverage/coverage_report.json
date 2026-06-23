@@ -3,27 +3,32 @@
     {
       "season": 2021,
       "n_team_weeks": 608,
-      "ovr_coverage": 0.8048
+      "ovr_coverage": 0.8048,
+      "gsis_match_rate": 0.9601
     },
     {
       "season": 2022,
       "n_team_weeks": 608,
-      "ovr_coverage": 0.8249
+      "ovr_coverage": 0.8249,
+      "gsis_match_rate": 0.9514
     },
     {
       "season": 2023,
       "n_team_weeks": 608,
-      "ovr_coverage": 0.8266
+      "ovr_coverage": 0.8266,
+      "gsis_match_rate": 0.9341
     },
     {
       "season": 2024,
       "n_team_weeks": 608,
-      "ovr_coverage": 0.7712
+      "ovr_coverage": 0.7712,
+      "gsis_match_rate": 0.9469
     },
     {
       "season": 2025,
       "n_team_weeks": 544,
-      "ovr_coverage": 0.7649
+      "ovr_coverage": 0.7649,
+      "gsis_match_rate": 0.8334
     }
   ]
 }
