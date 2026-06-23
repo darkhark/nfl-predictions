@@ -526,7 +526,7 @@ metrics are tracked:
   `label=="Launch"` iteration), bridged to gsis via **nflverse seasonal rosters**; (b)
   normalizes the new depth schema (latest **pre-game-day** snapshot — leakage-safe — with
   positions coarsened to the pre-2025 vocabulary so 2025 matches the all-old-schema training
-  distribution); (c) routes by season (≤2024 unchanged theedgepredictor path). **Measured
+  distribution); (c) routes by season (≤2024 keeps the existing theedgepredictor source + processed/ gsis bridge; the shared `available_starters` core is reused unchanged). **Measured
   result: 2025 `_ovr` coverage 0% → 76.5%**, inside the 66–78% historical band (2024 = 0.771
   unchanged); 2025 gsis match 0.833 (a file-composition effect — the full 3,067-player Madden
   file includes camp bodies with no nflverse id; starters match fine). Reproduce with

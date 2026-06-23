@@ -1,6 +1,8 @@
 # src/data/madden/ids.py
 """Attach nflverse gsis_id to Madden players by bridging through the edgepredictor
-`processed/` file (which carries both `fullname` and the gsis `player_id`)."""
+`processed/` file (which carries both `fullname` and the gsis `player_id`). For the
+2025+ madden-tools source (no gsis in the payload), `attach_gsis_id_from_rosters`
+bridges via nflverse seasonal rosters (whose `player_id` is the gsis id)."""
 import re
 import pandas as pd
 import nfl_data_py as nfl
@@ -96,6 +98,7 @@ def attach_gsis_id_from_rosters(df, season, rosters=None):
     proc['_norm_name'] = proc['player_name'].map(normalize_name)
 
     proc['_key'] = proc['_norm_name'] + '|' + proc['team'].astype(str)
+    # last-write-wins on duplicate name|team; nflverse seasonal rosters are deduplicated per season
     lookup_primary = dict(zip(proc['_key'], proc['player_id']))
 
     name_lookup = {}

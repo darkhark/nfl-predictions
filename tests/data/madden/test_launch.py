@@ -34,6 +34,11 @@ class TestParseLaunchRatings(unittest.TestCase):
         self.assertEqual(lamar['power_moves'], 40)
         self.assertEqual(lamar['finesse_moves'], 35)
         self.assertEqual(lamar['season'], 2025)
+        self.assertEqual(lamar['weight'], 215)
+        juszczyk = out[out['full_name'] == 'Kyle Juszczyk'].iloc[0]
+        self.assertEqual(juszczyk['team'], 'SF')
+        self.assertEqual(juszczyk['position'], 'FB')
+        self.assertEqual(juszczyk['weight'], 235)
 
     def test_empty_players_returns_empty_contract_frame(self):
         out = launch.parse_launch_ratings([], _teams(), 2025)
@@ -109,3 +114,15 @@ class TestLoadMaddenLaunch(unittest.TestCase):
             out = launch.load_madden_launch('madden-26', 2025, cdn_base='https://cdn.test')
         self.assertEqual(list(out.columns), OUTPUT_COLUMNS)
         self.assertEqual(len(out), 0)
+
+    def test_env_var_base_used_when_arg_none(self):
+        store = {
+            'https://envcdn.test/madden-26/json/iterations.json': [
+                {'id': 0, 'label': 'Launch', 'active': True}],
+            'https://envcdn.test/madden-26/json/iterations/0/players.json': _players(),
+            'https://envcdn.test/madden-26/json/iterations/0/teams.json': _teams(),
+        }
+        with mock.patch.dict('os.environ', {'MADDEN_TOOLS_CDN_BASE': 'https://envcdn.test'}), \
+             mock.patch.object(launch, '_cdn_json', side_effect=lambda url: store[url]):
+            out = launch.load_madden_launch('madden-26', 2025, cdn_base=None)
+        self.assertEqual(set(out['full_name']), {'Lamar Jackson', 'Kyle Juszczyk'})
