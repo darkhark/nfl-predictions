@@ -1,8 +1,11 @@
 # src/data/madden/ids.py
 """Attach nflverse gsis_id to Madden players by bridging through the edgepredictor
-`processed/` file (which carries both `fullname` and the gsis `player_id`)."""
+`processed/` file (which carries both `fullname` and the gsis `player_id`). For the
+2025+ madden-tools source (no gsis in the payload), `attach_gsis_id_from_rosters`
+bridges via nflverse seasonal rosters (whose `player_id` is the gsis id)."""
 import re
 import pandas as pd
+import nfl_data_py as nfl
 from src.data.transformations import TEAM_ABBR_MAPPINGS
 
 PROCESSED_URL_TEMPLATE = (
@@ -81,3 +84,36 @@ def attach_gsis_id(df, season, processed=None):
 
     out = out.drop(columns=['_norm_name'])
     return out
+
+
+def attach_gsis_id_from_rosters(df, season, rosters=None):
+    """Attach gsis_id by matching to nflverse seasonal rosters (player_id IS gsis).
+
+    Primary key normalized_name|team; fallback name-only (ambiguous -> None). Used
+    for the 2025+ madden-tools source, whose JSON carries no gsis/pfr id."""
+    if rosters is None:
+        rosters = nfl.import_seasonal_rosters([season])
+    proc = rosters.copy()
+    proc['team'] = proc['team'].replace(TEAM_ABBR_MAPPINGS)
+    proc['_norm_name'] = proc['player_name'].map(normalize_name)
+
+    proc['_key'] = proc['_norm_name'] + '|' + proc['team'].astype(str)
+    # last-write-wins on duplicate name|team; nflverse seasonal rosters are deduplicated per season
+    lookup_primary = dict(zip(proc['_key'], proc['player_id']))
+
+    name_lookup = {}
+    for _, r in proc.iterrows():
+        n = r['_norm_name']
+        if n in name_lookup:
+            if name_lookup[n] != r['player_id']:
+                name_lookup[n] = None  # ambiguous — multiple distinct gsis
+        else:
+            name_lookup[n] = r['player_id']
+
+    out = df.copy()
+    out['_norm_name'] = out['full_name'].map(normalize_name)
+    out['gsis_id'] = (out['_norm_name'] + '|' + out['team'].astype(str)).map(lookup_primary)
+    mask = out['gsis_id'].isna()
+    if mask.any():
+        out.loc[mask, 'gsis_id'] = out.loc[mask, '_norm_name'].map(name_lookup)
+    return out.drop(columns=['_norm_name'])

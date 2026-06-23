@@ -100,3 +100,35 @@ class TestFallbackByPosition(unittest.TestCase):
         ])
         out = ids.attach_gsis_id(madden, 2023, processed=processed)
         self.assertNotIn('_norm_name', out.columns)
+
+
+class TestAttachGsisFromRosters(unittest.TestCase):
+    def _rosters(self):
+        return pd.DataFrame([
+            {'player_name': 'Lamar Jackson', 'player_id': '00-0034796',
+             'team': 'BAL', 'position': 'QB'},
+            {'player_name': 'Josh Allen', 'player_id': '00-0034857',
+             'team': 'BUF', 'position': 'QB'},
+            {'player_name': 'Josh Allen', 'player_id': '00-0035000',
+             'team': 'JAX', 'position': 'LB'},  # name collision -> ambiguous
+        ])
+
+    def test_primary_name_team_match(self):
+        df = pd.DataFrame([{'full_name': 'Lamar Jackson', 'team': 'BAL', 'position': 'QB'}])
+        out = ids.attach_gsis_id_from_rosters(df, 2025, rosters=self._rosters())
+        self.assertEqual(out.iloc[0]['gsis_id'], '00-0034796')
+
+    def test_team_match_disambiguates_name_collision(self):
+        df = pd.DataFrame([{'full_name': 'Josh Allen', 'team': 'BUF', 'position': 'QB'}])
+        out = ids.attach_gsis_id_from_rosters(df, 2025, rosters=self._rosters())
+        self.assertEqual(out.iloc[0]['gsis_id'], '00-0034857')
+
+    def test_unmatched_team_falls_back_to_name_only_when_unambiguous(self):
+        df = pd.DataFrame([{'full_name': 'Lamar Jackson', 'team': 'XXX', 'position': 'QB'}])
+        out = ids.attach_gsis_id_from_rosters(df, 2025, rosters=self._rosters())
+        self.assertEqual(out.iloc[0]['gsis_id'], '00-0034796')
+
+    def test_ambiguous_name_only_yields_na(self):
+        df = pd.DataFrame([{'full_name': 'Josh Allen', 'team': 'XXX', 'position': 'QB'}])
+        out = ids.attach_gsis_id_from_rosters(df, 2025, rosters=self._rosters())
+        self.assertTrue(pd.isna(out.iloc[0]['gsis_id']))

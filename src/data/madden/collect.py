@@ -2,26 +2,40 @@
 """Public entry point: assemble team-week Madden features for the given years."""
 import logging
 import pandas as pd
-from src.data.madden import ingest, ids, roles, features
+from src.data.madden import ingest, ids, roles, features, launch
 from src.data.madden import starters as starters_mod
 
 logger = logging.getLogger(__name__)
 
 
+def season_to_game_version(season):
+    """NFL season -> madden-tools game version. Madden NFL N covers season N-1, so
+    the version number is season-1999 (2025 -> 'madden-26')."""
+    return f'madden-{season - 1999}'
+
+
 def _player_season(season):
     """Plan-1 pipeline for one season -> classified player-season frame.
 
-    Returns an empty frame (with the required columns) if the season's data is
-    unavailable or its schema cannot be normalized."""
-    df = ingest.load_madden_season(season)
+    Routes by season: >=2025 uses the madden-tools launch JSON + nflverse-rosters
+    gsis bridge; <=2024 keeps the theedgepredictor raw CSV + processed/ bridge.
+    Returns an empty OUTPUT_COLUMNS frame if the season is unavailable."""
+    if season >= 2025:
+        df = launch.load_madden_launch(season_to_game_version(season), season)
+    else:
+        df = ingest.load_madden_season(season)
     if df.empty:
         logger.warning('season %s: empty Madden ingest — skipping', season)
         return df
     try:
-        df = ids.attach_gsis_id(df, season)
+        if season >= 2025:
+            df = ids.attach_gsis_id_from_rosters(df, season)
+        else:
+            df = ids.attach_gsis_id(df, season)
         return roles.classify_roles(df)
     except Exception as exc:
-        logger.warning('season %s: Madden id/role pipeline failed (%s) — skipping', season, exc)
+        logger.warning('season %s: Madden id/role pipeline failed (%s) — skipping',
+                       season, exc)
         return pd.DataFrame()
 
 

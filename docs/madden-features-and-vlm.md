@@ -140,9 +140,15 @@ NaN). The gate is at the season level:
 - **Baseline:** 66–78% non-null across `_ovr` columns for every season 2003–2024.
 - **WARN** if a season's coverage < 60%.
 - **FAIL / quarantine the season** if coverage < 30%.
-- ⚠️ **2025 currently = 0% → FAILS this gate** (nflverse changed the 2025 depth-chart
-  schema — missing `game_type`/`club_code`/`depth_team`; `get_weekly_starters` skips it).
-  This is the documented open follow-up; until fixed, 2025 contributes ~0 Madden signal.
+- ✅ **2025 = 0% → 76.5% (RESOLVED, Phase 0 / `madden-launch-ratings`).** The gap was never
+  a ratings problem — it was that nflverse changed the 2025+ depth-chart schema (dated
+  snapshots, granular `pos_abb`, no `game_type`/`club_code`/`depth_team`), so the
+  weekly-starters detection skipped it. Phase 0 sources 2025 launch ratings from the
+  madden-tools CDN `players.json` (launch iteration) bridged to gsis via nflverse seasonal
+  rosters, and normalizes the new depth schema (latest pre-game-day snapshot, positions
+  coarsened to the pre-2025 vocabulary for cross-era parity). Measured 2025 `_ovr` coverage
+  is **0.765** — inside the 66–78% baseline band. See `scripts/experiments/madden_coverage_report.py`
+  and `data/predict_games/madden_coverage/coverage_report.json`.
 
 ### 3d. Distribution drift
 The raw overalls have a real **era drift** — EA recalibrated the scale (league-mean ≈ 84 in
@@ -154,16 +160,25 @@ removes that drift by construction; the A/B ablation confirms this helps (Madden
   the season has too few teams.
 - **Pre-normalization source health (WARN):** on the *raw* overalls (before z-scoring), a
   season's league-mean far outside **[73, 87]** or **NaN** signals a data-source change.
-  2025 is NaN/empty here → consistent with the §3c coverage failure.
+  (2025 was NaN/empty here while the §3c gap was open; it is now populated from the
+  madden-tools launch source — see §3c.)
 
 ### 3e. Signal quality (upstream)
-- Per-season **gsis match rate ≥ 0.85** (the Plan-1 bridge gate; 2023 measured 0.9341).
-  Below threshold ⇒ degraded coverage downstream. 2009 (~0%) and pre-2017 SD/LAC team-code
-  mismatches are known low-coverage years (outside the strong 2015+ window).
+- Per-season **gsis match rate ≥ 0.85** (the Plan-1 bridge gate; 2023 measured 0.9341,
+  2024 measured 0.9469). Below threshold ⇒ degraded coverage downstream. 2009 (~0%) and
+  pre-2017 SD/LAC team-code mismatches are known low-coverage years (outside the strong
+  2015+ window).
+- **2025 (madden-tools source) measured 0.8334**, just under the 0.85 gate. This is a
+  *file-composition* effect, not a bridge failure: the madden-tools launch `players.json`
+  carries the full ~3,067-player roster (camp/practice-squad/UDFA bodies that have no
+  nflverse gsis by construction), vs the curated ~2,316-player theedgepredictor file the
+  0.85 gate was set on. The unmatched players are overwhelmingly non-starters, so downstream
+  `_ovr` coverage stays healthy (0.765, §3c) — the starters that drive the features match.
 
 ### 3f. What the VLM currently catches
-1. **2025 zero coverage** (3c/3d) — the headline gap; quarantine until the depth-chart
-   schema mapping lands.
+1. **2025 coverage** (3c/3d) — **resolved in Phase 0** (0% → 76.5%): the depth-chart schema
+   mapping and the madden-tools launch source landed on `madden-launch-ratings`. The gate
+   now passes for 2025; a future season's schema change would re-trip §3c.
 2. **Era drift** (3d) — informational; argues for leaning on diffs over raw level when
    training across eras.
 3. **~25–35% baseline NaN** — expected (backups/unmatched/early-season diff windows), not
