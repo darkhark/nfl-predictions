@@ -2,6 +2,7 @@ import unittest
 from unittest import mock
 import pandas as pd
 from src.data.madden import starters
+from src.data.madden import depth_2025  # noqa: E402  (top of file with the others)
 import nfl_data_py as nfl
 
 
@@ -92,3 +93,50 @@ class TestLiveStarters(unittest.TestCase):
     def test_has_keys(self):
         for col in ['season', 'week', 'team', 'gsis_id', 'position']:
             self.assertIn(col, self.df.columns)
+
+
+class TestGetWeeklyStarters2025Dispatch(unittest.TestCase):
+    def _new_depth(self):
+        return pd.DataFrame([
+            {'dt': '2025-09-03T10:00:00Z', 'team': 'BAL', 'pos_abb': 'QB',
+             'pos_rank': 1, 'gsis_id': 'LAMAR'},
+            {'dt': '2025-09-03T10:00:00Z', 'team': 'BAL', 'pos_abb': 'QB',
+             'pos_rank': 2, 'gsis_id': 'BACKUP_QB'},
+        ])
+
+    def _schedule(self):
+        return pd.DataFrame([
+            {'season': 2025, 'week': 1, 'game_type': 'REG', 'gameday': '2025-09-07',
+             'gametime': '13:00', 'home_team': 'BAL', 'away_team': 'CLE'},
+        ])
+
+    def test_2025_routes_through_new_schema(self):
+        with mock.patch.object(starters.nfl, 'import_depth_charts',
+                               return_value=self._new_depth()), \
+             mock.patch.object(starters.nfl, 'import_schedules',
+                               return_value=self._schedule()), \
+             mock.patch.object(starters.nfl, 'import_injuries',
+                               return_value=pd.DataFrame(
+                                   columns=['gsis_id', 'report_status', 'team',
+                                            'season', 'week'])):
+            out = starters.get_weekly_starters([2025])
+        qb = out[(out['team'] == 'BAL') & (out['position'] == 'QB')].iloc[0]
+        self.assertEqual(qb['gsis_id'], 'LAMAR')
+        self.assertEqual(qb['week'], 1)
+
+    def test_2025_quarantines_on_unexpected_schema(self):
+        # An old-shaped frame for a 2025 request -> no pos_abb -> empty (quarantine).
+        old_shape = pd.DataFrame([
+            {'season': 2025, 'week': 1, 'game_type': 'REG', 'club_code': 'BAL',
+             'depth_team': '1', 'position': 'QB', 'gsis_id': 'LAMAR'}])
+        with mock.patch.object(starters.nfl, 'import_depth_charts',
+                               return_value=old_shape), \
+             mock.patch.object(starters.nfl, 'import_schedules',
+                               return_value=self._schedule()), \
+             mock.patch.object(starters.nfl, 'import_injuries',
+                               return_value=pd.DataFrame(
+                                   columns=['gsis_id', 'report_status'])):
+            out = starters.get_weekly_starters([2025])
+        self.assertEqual(len(out), 0)
+        self.assertEqual(list(out.columns),
+                         ['season', 'week', 'team', 'gsis_id', 'position'])
