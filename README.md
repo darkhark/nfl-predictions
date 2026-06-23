@@ -516,6 +516,24 @@ metrics are tracked:
     `data/predict_games/bayes_logistic/` (the multi-hundred-MB `.nc` traces are git-ignored;
     the compact `coef_summary_*.json` files are the committed transfer-learning surface).
 
+- **Phase 0 — 2025 launch-ratings data layer (data-quality note, 2026-06-23,
+  `madden-launch-ratings`):** not a numbered modeling run — a data-plumbing phase that makes
+  2025+ Madden *launch* ratings flow through the existing `src/data/madden/` pipeline. The
+  documented "2025 = 0% coverage" gap was never a ratings problem: nflverse changed the
+  2025+ depth-chart schema (dated snapshots, granular `pos_abb`, no
+  `game_type`/`club_code`/`depth_team`), which broke weekly-starter detection. Phase 0 (a)
+  sources 2025 launch ratings from the user's `madden-tools` CDN `players.json` (the
+  `label=="Launch"` iteration), bridged to gsis via **nflverse seasonal rosters**; (b)
+  normalizes the new depth schema (latest **pre-game-day** snapshot — leakage-safe — with
+  positions coarsened to the pre-2025 vocabulary so 2025 matches the all-old-schema training
+  distribution); (c) routes by season (≤2024 unchanged theedgepredictor path). **Measured
+  result: 2025 `_ovr` coverage 0% → 76.5%**, inside the 66–78% historical band (2024 = 0.771
+  unchanged); 2025 gsis match 0.833 (a file-composition effect — the full 3,067-player Madden
+  file includes camp bodies with no nflverse id; starters match fine). Reproduce with
+  `MADDEN_TOOLS_CDN_BASE=https://cdn.madden.tools python -m scripts.experiments.madden_coverage_report`;
+  numbers in `data/predict_games/madden_coverage/coverage_report.json`. **Run 28 is reserved
+  for Phase 1** (the first XGBoost-RFE run that puts launch features through feature selection).
+
 ## Feature-group ablation: are the feature families complementary or redundant?
 
 Runs 5–24 add one feature *family* at a time and let RFE pick columns, which can only

@@ -1,0 +1,29 @@
+{
+  "seasons": [
+    {
+      "season": 2021,
+      "n_team_weeks": 608,
+      "ovr_coverage": 0.8048
+    },
+    {
+      "season": 2022,
+      "n_team_weeks": 608,
+      "ovr_coverage": 0.8249
+    },
+    {
+      "season": 2023,
+      "n_team_weeks": 608,
+      "ovr_coverage": 0.8266
+    },
+    {
+      "season": 2024,
+      "n_team_weeks": 608,
+      "ovr_coverage": 0.7712
+    },
+    {
+      "season": 2025,
+      "n_team_weeks": 544,
+      "ovr_coverage": 0.7649
+    }
+  ]
+}
