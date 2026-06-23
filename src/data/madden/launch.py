@@ -4,6 +4,7 @@ flow through the same ids/roles/features pipeline as the historical theedgepredi
 source. Launch is the iteration whose `iterations.json` label == "Launch"."""
 import logging
 import os
+
 import requests
 import pandas as pd
 from src.data.madden.ingest import OUTPUT_COLUMNS
@@ -85,7 +86,7 @@ def load_madden_launch(game_version, season, *, cdn_base=None):
         it_dir = f'{root}/iterations/{launch_id}'
         players = _cdn_json(f'{it_dir}/players.json')
         teams = _cdn_json(f'{it_dir}/teams.json')
+        return parse_launch_ratings(players, teams, season)
     except Exception as exc:
         logger.warning('season %s: failed to load madden-tools launch (%s)', season, exc)
         return pd.DataFrame(columns=OUTPUT_COLUMNS)
-    return parse_launch_ratings(players, teams, season)

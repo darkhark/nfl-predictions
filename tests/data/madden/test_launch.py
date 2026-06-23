@@ -95,4 +95,17 @@ class TestLoadMaddenLaunch(unittest.TestCase):
     def test_missing_base_returns_empty(self):
         with mock.patch.dict('os.environ', {}, clear=True):
             out = launch.load_madden_launch('madden-26', 2025, cdn_base=None)
+        self.assertEqual(list(out.columns), OUTPUT_COLUMNS)
+        self.assertEqual(len(out), 0)
+
+    def test_parse_failure_returns_empty(self):
+        store = {
+            'https://cdn.test/madden-26/json/iterations.json': [
+                {'id': 0, 'label': 'Launch', 'active': True}],
+            'https://cdn.test/madden-26/json/iterations/0/players.json': _players(),
+            'https://cdn.test/madden-26/json/iterations/0/teams.json': [{'id': 26}],  # no 'acronym'
+        }
+        with mock.patch.object(launch, '_cdn_json', side_effect=lambda url: store[url]):
+            out = launch.load_madden_launch('madden-26', 2025, cdn_base='https://cdn.test')
+        self.assertEqual(list(out.columns), OUTPUT_COLUMNS)
         self.assertEqual(len(out), 0)
