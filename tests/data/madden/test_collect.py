@@ -63,3 +63,40 @@ class TestGetMaddenData(unittest.TestCase):
                         "2023 row should have NaN diff (no 2022 season loaded)")
         self.assertEqual(row_2024['madden_qb_ovr_diff_prev_season'], 6,
                          "2024 diff should be 96 - 90 = 6")
+
+
+class TestSeasonRouting(unittest.TestCase):
+    def test_game_version_formula(self):
+        self.assertEqual(collect.season_to_game_version(2025), 'madden-26')
+        self.assertEqual(collect.season_to_game_version(2026), 'madden-27')
+
+    def test_2025_routes_to_launch_and_rosters(self):
+        launch_df = pd.DataFrame([{
+            'season': 2025, 'full_name': 'Lamar Jackson', 'team': 'BAL',
+            'position': 'QB', 'overall': 94, 'weight': 215,
+            'power_moves': 40, 'finesse_moves': 35}])
+        with mock.patch.object(collect.launch, 'load_madden_launch',
+                               return_value=launch_df) as mlaunch, \
+             mock.patch.object(collect.ids, 'attach_gsis_id_from_rosters',
+                               side_effect=lambda d, s: d.assign(gsis_id='G')) as mbridge, \
+             mock.patch.object(collect.ingest, 'load_madden_season') as mold:
+            out = collect._player_season(2025)
+        mlaunch.assert_called_once_with('madden-26', 2025)
+        mbridge.assert_called_once()
+        mold.assert_not_called()
+        self.assertEqual(out.iloc[0]['gsis_id'], 'G')
+        self.assertIn('role', out.columns)
+
+    def test_pre2025_uses_theedgepredictor_path(self):
+        old_df = pd.DataFrame([{
+            'season': 2023, 'full_name': 'X Y', 'team': 'KC', 'position': 'QB',
+            'overall': 99, 'weight': 230, 'power_moves': 20, 'finesse_moves': 20}])
+        with mock.patch.object(collect.ingest, 'load_madden_season',
+                               return_value=old_df) as mold, \
+             mock.patch.object(collect.ids, 'attach_gsis_id',
+                               side_effect=lambda d, s: d.assign(gsis_id='G')) as mbridge, \
+             mock.patch.object(collect.launch, 'load_madden_launch') as mlaunch:
+            collect._player_season(2023)
+        mold.assert_called_once_with(2023)
+        mbridge.assert_called_once()
+        mlaunch.assert_not_called()
