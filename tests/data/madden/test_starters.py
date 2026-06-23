@@ -74,7 +74,11 @@ class TestGetWeeklyStartersResilience(unittest.TestCase):
             'dt': '2025-01-01', 'team': 'KC', 'player_name': 'Patrick Mahomes',
             'gsis_id': 'G1', 'pos_grp': 'QB',
         }])
-        with mock.patch.object(nfl, 'import_depth_charts', return_value=new_schema_depth):
+        with mock.patch.object(nfl, 'import_depth_charts', return_value=new_schema_depth), \
+             mock.patch.object(starters.nfl, 'import_schedules',
+                               return_value=pd.DataFrame(columns=['season', 'week', 'game_type',
+                                                                  'gameday', 'gametime',
+                                                                  'home_team', 'away_team'])):
             out = starters.get_weekly_starters([2025])
         self.assertTrue(out.empty)
         self.assertListEqual(list(out.columns), self._EXPECTED_COLS)

@@ -84,6 +84,7 @@ def _starters_from_depth(depth, injuries):
         chosen['season'], chosen['week'], chosen['team'] = season, week, club
         frames.append(chosen)
     if not frames:
+        logger.warning('no depth-chart groups produced starters — returning empty')
         return None
     out = pd.concat(frames, ignore_index=True)
     return out[['season', 'week', 'team', 'gsis_id', 'position']]
