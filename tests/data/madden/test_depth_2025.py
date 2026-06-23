@@ -57,3 +57,14 @@ class TestNormalize2025Depth(unittest.TestCase):
         out = depth_2025.normalize_2025_depth(pd.DataFrame(), _schedule(), 2025)
         self.assertEqual(len(out), 0)
         self.assertIn('depth_team', out.columns)
+
+    def test_game_day_midnight_snapshot_excluded(self):
+        depth = pd.DataFrame([
+            {'dt': '2025-09-06T10:00:00Z', 'team': 'BAL', 'pos_abb': 'QB',
+             'pos_rank': 1, 'gsis_id': 'DAY_BEFORE'},
+            {'dt': '2025-09-07T00:00:00Z', 'team': 'BAL', 'pos_abb': 'QB',
+             'pos_rank': 1, 'gsis_id': 'GAME_DAY_MIDNIGHT'},
+        ])
+        out = depth_2025.normalize_2025_depth(depth, _schedule(), 2025)
+        wk1 = out[(out['week'] == 1) & (out['position'] == 'QB')]
+        self.assertEqual(list(wk1['gsis_id']), ['DAY_BEFORE'])

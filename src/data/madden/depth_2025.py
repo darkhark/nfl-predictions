@@ -50,7 +50,7 @@ def normalize_2025_depth(depth_raw, schedule, season):
     d = depth_raw.copy()
     d['position'] = d['pos_abb'].map(POS_ABB_TO_COARSE)
     d = d[d['position'].notna()].copy()
-    d['_dt'] = pd.to_datetime(d['dt'], errors='coerce', utc=True).dt.tz_localize(None)
+    d['_dt'] = pd.to_datetime(d['dt'], errors='coerce', utc=True).dt.tz_convert(None)
     schedule_days = _team_gameday(schedule, season)
     frames = []
     for team, team_days in schedule_days.groupby('team'):
@@ -58,6 +58,9 @@ def normalize_2025_depth(depth_raw, schedule, season):
         if snaps.empty:
             continue
         for _, gw in team_days.iterrows():
+            # Leakage guard: both sides are tz-naive UTC — snapshot `_dt` (tz-converted
+            # above) and `gameday` (a bare date -> naive midnight). Strict `<` keeps only
+            # snapshots from strictly before the game day.
             pre = snaps[snaps['_dt'] < gw['gameday']]
             if pre.empty:
                 continue
