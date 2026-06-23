@@ -3,6 +3,8 @@ snapshot into the shared `ingest.OUTPUT_COLUMNS` contract, so 2025+ launch ratin
 flow through the same ids/roles/features pipeline as the historical theedgepredictor
 source. Launch is the iteration whose `iterations.json` label == "Launch"."""
 import logging
+import os
+import requests
 import pandas as pd
 from src.data.madden.ingest import OUTPUT_COLUMNS
 from src.data.transformations import TEAM_ABBR_MAPPINGS
@@ -48,3 +50,42 @@ def parse_launch_ratings(players, teams, season):
     out = pd.DataFrame(rows)
     out['team'] = out['team'].replace(TEAM_ABBR_MAPPINGS)
     return out[OUTPUT_COLUMNS]
+
+
+# madden-tools DigitalOcean Spaces CDN. The roster JSON is public-read (the webapp
+# fetches it client-side), so a plain GET works — no credentials for reads. Path
+# layout mirrors json-generator output: {base}/{version}/json/iterations.json and
+# {base}/{version}/json/iterations/{id}/{players,teams}.json
+# (verified in madden-tools webapp GuideMetadataCache.ts / draft-genius CDNDataRepository.ts).
+# Set MADDEN_TOOLS_CDN_BASE to the confirmed CDN domain (e.g. the value of the
+# webapp's NEXT_PUBLIC_CDN_DOMAIN) before the real-data run (Task 7).
+
+
+def _cdn_json(url):
+    """GET a JSON document. The single network seam (patched in tests)."""
+    resp = requests.get(url, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def load_madden_launch(game_version, season, *, cdn_base=None):
+    """Fetch + parse the launch-iteration players/teams JSON for `game_version`.
+
+    Returns an empty OUTPUT_COLUMNS frame on any failure (so collect proceeds with
+    NaN Madden features for the season)."""
+    base = (cdn_base if cdn_base is not None
+            else os.environ.get('MADDEN_TOOLS_CDN_BASE', '')).rstrip('/')
+    if not base:
+        logger.warning('season %s: MADDEN_TOOLS_CDN_BASE unset — skipping launch load', season)
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+    try:
+        root = f'{base}/{game_version}/json'
+        iterations = _cdn_json(f'{root}/iterations.json')
+        launch_id = select_launch_iteration(iterations)['id']
+        it_dir = f'{root}/iterations/{launch_id}'
+        players = _cdn_json(f'{it_dir}/players.json')
+        teams = _cdn_json(f'{it_dir}/teams.json')
+    except Exception as exc:
+        logger.warning('season %s: failed to load madden-tools launch (%s)', season, exc)
+        return pd.DataFrame(columns=OUTPUT_COLUMNS)
+    return parse_launch_ratings(players, teams, season)

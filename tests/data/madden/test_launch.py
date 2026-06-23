@@ -1,5 +1,6 @@
 import unittest
 import pandas as pd
+from unittest import mock
 from src.data.madden import launch
 from src.data.madden.ingest import OUTPUT_COLUMNS
 
@@ -65,3 +66,33 @@ class TestSelectLaunchIteration(unittest.TestCase):
         dup = [{'id': 0, 'label': 'Launch'}, {'id': 5, 'label': 'launch'}]
         with self.assertRaises(ValueError):
             launch.select_launch_iteration(dup)
+
+
+class TestLoadMaddenLaunch(unittest.TestCase):
+    def _fake_cdn(self):
+        store = {
+            'https://cdn.test/madden-26/json/iterations.json': [
+                {'id': 0, 'label': 'Launch', 'active': True},
+                {'id': 1, 'label': 'Week 1', 'active': True},
+            ],
+            'https://cdn.test/madden-26/json/iterations/0/players.json': _players(),
+            'https://cdn.test/madden-26/json/iterations/0/teams.json': _teams(),
+        }
+        return lambda url: store[url]
+
+    def test_loads_launch_iteration(self):
+        with mock.patch.object(launch, '_cdn_json', side_effect=self._fake_cdn()):
+            out = launch.load_madden_launch('madden-26', 2025, cdn_base='https://cdn.test')
+        self.assertEqual(set(out['full_name']), {'Lamar Jackson', 'Kyle Juszczyk'})
+        self.assertEqual(out[out['full_name'] == 'Lamar Jackson'].iloc[0]['team'], 'BAL')
+
+    def test_network_failure_returns_empty(self):
+        with mock.patch.object(launch, '_cdn_json', side_effect=OSError('boom')):
+            out = launch.load_madden_launch('madden-26', 2025, cdn_base='https://cdn.test')
+        self.assertEqual(list(out.columns), OUTPUT_COLUMNS)
+        self.assertEqual(len(out), 0)
+
+    def test_missing_base_returns_empty(self):
+        with mock.patch.dict('os.environ', {}, clear=True):
+            out = launch.load_madden_launch('madden-26', 2025, cdn_base=None)
+        self.assertEqual(len(out), 0)
