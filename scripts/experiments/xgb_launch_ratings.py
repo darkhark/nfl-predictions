@@ -9,6 +9,9 @@ import numpy as np
 import pandas as pd
 
 from data_science_utilities.feature_groups import partition
+from data_science_utilities.models.xgb.feature_selection.recursive.classifier_cross_validation import (
+    ClassifierCrossValidationRecursiveFeatureSelection,
+)
 
 RANDOM_SEED = 32
 TARGET = 'target_win'
@@ -48,3 +51,35 @@ def assert_madden_2025_coverage(df, min_cov=0.30):
 def selected_features_from_rfe_csv(path, best_num_feats):
     fdf = pd.read_csv(path, index_col=0)
     return list(fdf.loc[best_num_feats, :].dropna().values)
+
+
+RFE_XGB_PARAMS = dict(
+    n_estimators=5000, n_jobs=-1, learning_rate=.15, early_stopping_rounds=10,
+    max_depth=5, eval_metric='auc', importance_type='total_gain', random_state=RANDOM_SEED,
+)
+_RFE_PROGRESS_LOG = '/tmp/xgb_launch_rfe_progress.log'
+
+
+def _log_rfe_progress(row):
+    with open(_RFE_PROGRESS_LOG, 'a') as fh:
+        fh.write(f"iter {row['iteration']}/{row['max_iter']}: "
+                 f"{row['num_features']} features, cv {row['score']:.4f}\n")
+
+
+def run_rfe(df, candidate_features, out_csv, *, rfe_params=RFE_XGB_PARAMS,
+            max_iter=60, min_features=5, n_folds=5):
+    """CV RFE on season<2024 over the rank-only pool; writes the features-by-count CSV
+    and returns (best_num_feats via 1-SE, the fitted rfe object)."""
+    pool = build_rfe_pool(candidate_features)
+    inputs = (df[pool + [TARGET, 'season']]
+              .sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True))
+    np.random.seed(RANDOM_SEED)
+    train = inputs[inputs['season'] < 2024]
+    rfe = ClassifierCrossValidationRecursiveFeatureSelection(
+        train[pool], train[TARGET], rfe_params, model_score_metric='brier')
+    rfe.get_optimal_features_no_grouped_records(
+        max_iter=max_iter, min_features=min_features, n_folds=n_folds,
+        verbose=1, on_iteration=_log_rfe_progress)
+    os.makedirs(os.path.dirname(out_csv) or '.', exist_ok=True)
+    rfe.get_features_in_dataframe().to_csv(out_csv)
+    return rfe.get_best_num_features_1se(), rfe
