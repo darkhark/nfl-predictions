@@ -571,7 +571,7 @@ metrics are tracked:
   (`scripts/experiments/madden_internal_ablation.py`; results under
   `data/predict_games/group_ablation/madden_internal_*.json`):
   - **By unit** (QB / offense-skill / O-line / D-front / coverage / matchup): **the QB unit
-    dominates** — Shapley **+0.0107** and unique leave-one-out **+0.0088**, ~7× any other unit;
+    dominates** — Shapley **+0.0106** and unique leave-one-out **+0.0088**, ~7× any other unit;
     every other unit is small and several have negative leave-one-out (redundant).
   - **By measure** (talent `_ovr` levels vs the `_ovr_diff_*` momentum features): **levels carry
     the signal** (Shapley +0.0139, LOO +0.0109); the 138 momentum/diff columns are **redundant**
@@ -579,7 +579,7 @@ metrics are tracked:
     around a QB-talent-level core.
   - **Cross-family pairing** (`run_group_ablation.py` with `MADDEN_LEVELS_ONLY=1`, 8 families incl.
     a 50-column Madden-levels block; `group_ablation_brier_madden_levels.json`): **Madden levels
-    are the single most valuable family** (Shapley +0.0056; the only family with meaningful unique
+    are the single most valuable family** (Shapley +0.0055; the only family with meaningful unique
     value, LOO +0.0038 — every PBP family is negative/redundant). But **all Madden×family
     interactions are sub-additive** (no synergy): Madden *substitutes for* the other families'
     team-quality signal rather than complementing it.

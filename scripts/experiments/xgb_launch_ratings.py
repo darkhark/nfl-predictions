@@ -6,7 +6,6 @@ BART/Bayesian runs. Rank-only pool + the 188 madden_* columns; seed-32 protocol.
 import argparse
 import json
 import os
-import numpy as np
 import pandas as pd
 
 from data_science_utilities.feature_groups import partition
