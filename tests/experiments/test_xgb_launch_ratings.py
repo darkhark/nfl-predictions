@@ -58,12 +58,12 @@ def _synthetic(n_per_season=30):
         for i in range(n_per_season):
             signal = rng.normal()
             rows.append({
-                'season': s, 'week': (i % 17) + 1,
+                'season': s, 'week': (i % 5) + 1,  # Fewer weeks for better balance per week
                 'target_madden_qb_ovr': signal + rng.normal(0, 0.1),
                 'opp_madden_edge_ovr': rng.normal(),
                 'off_target_epa_per_play_rank': rng.normal(),
                 'off_target_epa_per_play_cumulative_average': rng.normal(),  # rank-only drop
-                'target_win': int(signal + rng.normal(0, 0.5) > 0),
+                'target_win': int(signal + rng.normal(0, 0.2) > -0.1),
             })
     return pd.DataFrame(rows)
 
@@ -86,3 +86,23 @@ class TestRunRfe(unittest.TestCase):
             flat = set(written.values.ravel().tolist())
             self.assertNotIn('off_target_epa_per_play_cumulative_average', flat)
             self.assertNotIn('target_win', flat)
+
+
+class TestGridAndResults(unittest.TestCase):
+    def test_grid_eval_and_results(self):
+        df = _synthetic(n_per_season=40)
+        selected = ['target_madden_qb_ovr', 'opp_madden_edge_ovr',
+                    'off_target_epa_per_play_rank', 'week']
+        tiny_params = dict(xlr.RANDOM_XGB_PARAMS, n_estimators=[20, 30])
+        tiny_search = dict(xlr.RANDOM_SEARCH_PARAMS, n_iter=2, cv=2)
+        best, metrics, holdout = xlr.run_grid_and_eval(
+            df, selected, search_params=tiny_params, search_kwargs=tiny_search)
+        for k in ('auroc', 'accuracy', 'brier', 'logloss',
+                  'per_week_auroc_mean', 'reliability_curve'):
+            self.assertIn(k, metrics)
+        res = xlr.build_results(metrics, selected, best, best_num_feats=len(selected))
+        self.assertEqual(res['n_selected'], 4)
+        self.assertEqual(set(res['madden_selected']),
+                         {'target_madden_qb_ovr', 'opp_madden_edge_ovr'})
+        self.assertIn('champion_deltas', res)
+        self.assertIn('xgb_run11_auroc_delta', res['champion_deltas'])

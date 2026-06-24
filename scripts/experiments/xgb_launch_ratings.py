@@ -12,6 +12,10 @@ from data_science_utilities.feature_groups import partition
 from data_science_utilities.models.xgb.feature_selection.recursive.classifier_cross_validation import (
     ClassifierCrossValidationRecursiveFeatureSelection,
 )
+from data_science_utilities.models.xgb.hyperparameter_search.random_search import (
+    OptimalXGBHyperparameterSearch,
+)
+from data_science_utilities.models.bayes_logistic.evaluate import evaluate
 
 RANDOM_SEED = 32
 TARGET = 'target_win'
@@ -82,3 +86,58 @@ def run_rfe(df, candidate_features, out_csv, *, rfe_params=RFE_XGB_PARAMS,
     os.makedirs(os.path.dirname(out_csv) or '.', exist_ok=True)
     rfe.get_features_in_dataframe().to_csv(out_csv)
     return rfe.get_best_num_features_1se(), rfe
+
+
+RANDOM_XGB_PARAMS = {
+    'learning_rate': [.03, .05, .1, .15, .2], 'max_depth': [2, 3],
+    'subsample': [.5, .7, .9], 'min_child_weight': [10, 20, 50, 100],
+    'gamma': [.5, 1, 5, 10, 100], 'n_estimators': [10, 20, 30, 40, 50],
+    'early_stopping_rounds': [10, 20, 50], 'importance_type': ['total_gain'],
+    'eval_metric': ['auc'],
+}
+RANDOM_SEARCH_PARAMS = dict(n_iter=100, cv=5, n_jobs=-1, random_state=RANDOM_SEED,
+                            scoring='neg_brier_score')
+CHAMPIONS = {
+    'xgb_run11': {'auroc': 0.707, 'brier': 0.2206},
+    'bart_run6': {'auroc': 0.705, 'brier': 0.2194},
+    'bart_run10': {'auroc': 0.708, 'brier': 0.2185},
+}
+
+
+def run_grid_and_eval(df, selected_features, *, search_params=RANDOM_XGB_PARAMS,
+                      search_kwargs=RANDOM_SEARCH_PARAMS):
+    """Seed-32 split (train<2022 / valid22-23 / holdout>=2024), random search on the
+    selected set, hold-out metrics via bayes_logistic.evaluate. Returns
+    (best_model, metrics, holdout_df)."""
+    data = df.sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True)
+    train = data[data['season'] < 2022]
+    valid = data[(data['season'] >= 2022) & (data['season'] < 2024)]
+    holdout = data[data['season'] >= 2024].copy()
+    search = OptimalXGBHyperparameterSearch(
+        train[selected_features], train[TARGET],
+        valid[selected_features], valid[TARGET],
+    ).search(search_params, **search_kwargs)
+    best = search.best_estimator_
+    preds = best.predict_proba(holdout[selected_features])[:, 1]
+    metrics = evaluate(holdout[TARGET], preds, p_std=None, weeks=holdout['week'])
+    return best, metrics, holdout
+
+
+def build_results(metrics, selected_features, best_model, best_num_feats):
+    mads = madden_columns(selected_features)
+    importances = best_model.get_booster().get_score()  # {feat: total_gain}
+    ranked = sorted(importances.items(), key=lambda kv: kv[1], reverse=True)
+    rank_of = {f: i + 1 for i, (f, _) in enumerate(ranked)}
+    deltas = {}
+    for name, champ in CHAMPIONS.items():
+        deltas[f'{name}_auroc_delta'] = round(metrics['auroc'] - champ['auroc'], 4)
+        deltas[f'{name}_brier_delta'] = round(metrics['brier'] - champ['brier'], 4)
+    return {
+        'config': {'seed': RANDOM_SEED, 'selection_metric': 'brier',
+                   'rank_only': True, 'best_num_feats': int(best_num_feats)},
+        'n_selected': len(selected_features),
+        'madden_selected': mads,
+        'madden_importance_rank': {m: rank_of.get(m) for m in mads},
+        'metrics': metrics,
+        'champion_deltas': deltas,
+    }
