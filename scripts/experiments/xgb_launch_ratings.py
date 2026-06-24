@@ -3,6 +3,7 @@
 Reuses the in-repo CV RFE classifier, the random hyperparameter search, and the
 bayes_logistic.evaluate hold-out metric suite, so Run 28 is directly comparable to the
 BART/Bayesian runs. Rank-only pool + the 188 madden_* columns; seed-32 protocol."""
+import argparse
 import json
 import os
 import numpy as np
@@ -141,3 +142,43 @@ def build_results(metrics, selected_features, best_model, best_num_feats):
         'metrics': metrics,
         'champion_deltas': deltas,
     }
+
+
+PARQUET = 'data/predict_games/input_data/schedule_and_weekly.parquet'
+FEATURES_LIST = 'data/predict_games/model_features_in/xgb_features_list.csv'
+RFE_OUT = 'data/predict_games/model_features_in/rfe_features_kfolds_brier_madden.csv'
+RESULTS_DIR = 'data/predict_games/xgb_launch_ratings'
+MODEL_OUT = 'models/best_random_xgb_model_launch_ratings.json'
+
+
+def main(stage='all', *, parquet=PARQUET, features_list=FEATURES_LIST, rfe_out=RFE_OUT,
+         results_dir=RESULTS_DIR, model_out=MODEL_OUT, best_num_feats=None):
+    df = pd.read_parquet(parquet)
+    assert_madden_2025_coverage(df)
+    candidates = list(pd.read_csv(features_list)['feature'])
+
+    if stage in ('rfe', 'all'):
+        best_num_feats, _ = run_rfe(df, candidates, rfe_out)
+        print(f'1-SE selected feature count (brier): {best_num_feats}')
+    if stage in ('grid', 'all'):
+        if best_num_feats is None:
+            raise SystemExit('stage=grid requires --best-num-feats from a prior rfe run')
+        selected = selected_features_from_rfe_csv(rfe_out, best_num_feats)
+        model, metrics, _ = run_grid_and_eval(df, selected)
+        os.makedirs(os.path.dirname(model_out) or '.', exist_ok=True)
+        model.save_model(model_out)
+        os.makedirs(results_dir, exist_ok=True)
+        results = build_results(metrics, selected, model, best_num_feats)
+        with open(os.path.join(results_dir, 'results.json'), 'w') as fh:
+            json.dump(results, fh, indent=2)
+            fh.write('\n')
+        print(json.dumps(results['metrics'], indent=2))
+        print('champion deltas:', results['champion_deltas'])
+
+
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--stage', choices=['rfe', 'grid', 'all'], default='all')
+    ap.add_argument('--best-num-feats', type=int, default=None)
+    args = ap.parse_args()
+    main(stage=args.stage, best_num_feats=args.best_num_feats)

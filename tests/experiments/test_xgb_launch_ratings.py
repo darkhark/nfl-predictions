@@ -106,3 +106,20 @@ class TestGridAndResults(unittest.TestCase):
                          {'target_madden_qb_ovr', 'opp_madden_edge_ovr'})
         self.assertIn('champion_deltas', res)
         self.assertIn('xgb_run11_auroc_delta', res['champion_deltas'])
+
+
+class TestMainGuard(unittest.TestCase):
+    def test_main_raises_on_low_2025_coverage(self):
+        df = _synthetic(n_per_season=5)
+        # blank out 2025 madden so coverage is 0 -> guard must fire
+        df.loc[df['season'] == 2025,
+               ['target_madden_qb_ovr', 'opp_madden_edge_ovr']] = np.nan
+        with tempfile.TemporaryDirectory() as d:
+            pq = os.path.join(d, 'sw.parquet')
+            df.to_parquet(pq, index=False)
+            fl = os.path.join(d, 'feats.csv')
+            pd.DataFrame({'feature': ['target_madden_qb_ovr', 'opp_madden_edge_ovr',
+                                      'off_target_epa_per_play_rank', 'week',
+                                      'target_win']}).to_csv(fl, index=False)
+            with self.assertRaises(RuntimeError):
+                xlr.main(stage='rfe', parquet=pq, features_list=fl)
