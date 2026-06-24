@@ -143,5 +143,21 @@ class TestOneSESelection(unittest.TestCase):
         self.assertEqual(rfe.get_best_num_features_1se(), 5)
 
 
+class TestStalledPruning(unittest.TestCase):
+
+    def test_stalled_pruning_terminates_without_crashing(self):
+        # A tiny all-informative pool makes iteration 0's importance ranking drop nothing,
+        # which previously re-evaluated the same feature count and crashed. The convergence
+        # guard must let it finish cleanly with aligned bookkeeping.
+        rng = np.random.default_rng(32)
+        X = pd.DataFrame(rng.normal(size=(80, 3)), columns=['a', 'b', 'c'])
+        y = pd.Series(((X['a'] + X['b'] + X['c'] + rng.normal(scale=0.3, size=80)) > 0).astype(int))
+        rfe = ClassifierCrossValidationRecursiveFeatureSelection(X, y, dict(FAST_XGB_PARAMS))
+        rfe.get_optimal_features_no_grouped_records(drop_rate=0.3, max_iter=4, n_folds=3)
+        self.assertEqual(len(rfe.all_model_scores), len(rfe.all_features))  # alignment intact
+        self.assertEqual(len(set(rfe.all_features.keys())), len(rfe.all_features))  # unique counts
+        self.assertGreaterEqual(len(rfe.all_features), 1)
+
+
 if __name__ == '__main__':
     unittest.main()

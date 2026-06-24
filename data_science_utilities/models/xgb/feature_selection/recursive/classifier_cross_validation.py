@@ -89,6 +89,12 @@ class ClassifierCrossValidationRecursiveFeatureSelection:
                 if min_features is not None:
                     new_num_features = max(new_num_features, min_features)
                 train_features = list(self.importances.index)[:new_num_features]
+            # Pruning stalled: the next feature count was already evaluated (e.g. iteration 0's
+            # importance ranking dropped nothing on a small pool). Re-evaluating it corrupts the
+            # count->score alignment and hits the per-fold append path with a non-list, so stop —
+            # RFE has converged. Monotonically-decreasing real runs never reach this.
+            if len(train_features) in self.all_features:
+                break
 
     def get_features_in_dataframe(self):
         """
