@@ -191,6 +191,7 @@ metrics are tracked:
 | 25 | 2026-06-18 | **Madden ratings** (player overall ratings injected as team-week features), rank-only, base-vs-madden ablation (all groups vs all − madden) | 6160→6348 | +0.0075 delta | — | −0.0016 delta |
 | 26 | 2026-06-19 | **Madden ratings, `_ovr` z-scored within season** (removes cross-era ratings drift; diffs kept raw-point), same base-vs-madden ablation | 6160→6348 | **+0.0129 delta** | — | **−0.0034 delta** |
 | 27 | 2026-06-20 | **Bayesian logistic regression** (PyMC, weakly-informative `Normal(0,1)` prior), same 54 features / split as run 6 | 54 | 0.695 | 0.657 | 0.2208 |
+| 28 | 2026-06-24 | **Madden launch ratings through RFE** — rank-only pool + 188 `madden_*` (incl. 2025 launch data from Phase 0) as RFE candidates for the first time; brier-1SE, XGBoost | 51 | 0.699 | 0.637 | 0.2211 |
 
 **What changed between runs**
 
@@ -533,6 +534,37 @@ metrics are tracked:
   `MADDEN_TOOLS_CDN_BASE=https://cdn.madden.tools python -m scripts.experiments.madden_coverage_report`;
   numbers in `data/predict_games/madden_coverage/coverage_report.json`. **Run 28 is reserved
   for Phase 1** (the first XGBoost-RFE run that puts launch features through feature selection).
+- **Run 28 (Madden launch ratings through RFE — Phase 1, 2026-06-24, `xgb-launch-ratings`):**
+  the **first time Madden features entered feature selection** (prior Madden evidence, Runs
+  25–26, was forced-block ablation only). RFE ran on the rank-only pool **+ the 188 `madden_*`
+  columns** (6,348 candidates incl. the now-populated 2025 launch ratings), brier-1SE →
+  **51 features**, then the standard XGBoost random search on the seed-32 / train`<2022` /
+  valid`22–23` / 2024+2025 hold-out (1,088 rows). Eval reuses the Run-27
+  `bayes_logistic.evaluate` suite for direct comparability.
+  - **Madden SURVIVES selection (the positive result):** **13 of the 188 `madden_*` made the
+    51-feature set** — and they are the sensible ones, led by **both starting-QB ratings ranked
+    #2 and #3 by total-gain importance** (`target_madden_qb_ovr`, `opp_madden_qb_ovr`), plus the
+    trench block (`target_madden_edge_ovr`, `opp/target_interior_ol`, `target_exterior_ol`,
+    `madden_matchup_pass_pro`), receivers, corners, and the backfield. This is the first
+    evidence the launch ratings hold up as *selected* features, not just as a forced block.
+  - **But the selected model does NOT beat the champion (the honest null):** hold-out
+    **ROC-AUC 0.699 / accuracy 0.637 / Brier 0.2211** — ~0.6–0.9 AUROC points below XGBoost
+    run 11 (0.707), BART run 6 (0.705) and run 10 (0.708); Brier ≈ run-11 XGBoost (0.2206) and
+    a touch worse than the BART champions (0.2185–0.2194). The reliability curve is monotone and
+    reasonably calibrated.
+  - **Interpretation:** Madden talent is real signal the selector keeps and the model leans on
+    (the QBs are top-3), yet it does not lift XGBoost's *selected* 2024+2025 hold-out past the
+    champion — the same ceiling Runs 21–24 documented (added families are selected but don't move
+    the regime-limited hold-out). Note the comparison is a single madden-inclusive run vs the
+    *recorded* champions (not a same-snapshot with/without-madden A/B), so the 0.008 AUROC gap
+    can't be cleanly attributed to Madden; it is consistent with "survives selection, doesn't
+    break the ceiling." Contrast Run 26's forced-block ablation, where Madden helped on 7-fold
+    rolling CV (+0.0129 AUROC) — CV folds, not the specific 2024+2025 hold-out. Reproduce:
+    `MADDEN_TOOLS_CDN_BASE=https://cdn.madden.tools python -m scripts.data_assembly.predict_game_winner.schedule_and_weekly`
+    then `python -m scripts.experiments.xgb_launch_ratings --stage rfe` and
+    `... --stage grid --best-num-feats 51`; artifacts in `data/predict_games/xgb_launch_ratings/`
+    and `models/best_random_xgb_model_launch_ratings.json`. (This phase also fixed a latent
+    crash in the shared CV-RFE library when importance pruning stalls — see the PR.)
 
 ## Feature-group ablation: are the feature families complementary or redundant?
 
