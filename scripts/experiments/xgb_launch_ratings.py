@@ -73,7 +73,6 @@ def run_rfe(df, candidate_features, out_csv, *, rfe_params=RFE_XGB_PARAMS,
     pool = build_rfe_pool(candidate_features)
     inputs = (df[pool + [TARGET, 'season']]
               .sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True))
-    np.random.seed(RANDOM_SEED)
     train = inputs[inputs['season'] < 2024]
     rfe = ClassifierCrossValidationRecursiveFeatureSelection(
         train[pool], train[TARGET], rfe_params, model_score_metric='brier')
