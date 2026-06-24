@@ -103,6 +103,8 @@ def make_bart_fit(train_df, valid_df, y_train, y_valid, *,
             ppc = pm.sample_posterior_predictive(
                 idata, var_names=['p'], random_seed=seed, progressbar=False)
         valid_preds = ppc.posterior_predictive['p'].mean(dim=['chain', 'draw']).to_numpy()
+        # `variable_inclusion` is the PGBART sampler's per-feature usage count (pymc-bart
+        # 0.9.2). The key is sampler-internal, not PyMC public API — re-verify on env upgrades.
         inclusion = pd.Series(
             idata.sample_stats['variable_inclusion'].mean(dim=['chain', 'draw']).to_numpy(),
             index=features)
