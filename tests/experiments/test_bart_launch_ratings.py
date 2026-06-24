@@ -105,3 +105,27 @@ class TestRunFinalBart(unittest.TestCase):
         for k in ('auroc', 'brier', 'per_week_auroc_mean',
                   'width_stratified_brier', 'reliability_curve'):
             self.assertIn(k, metrics)   # p_std present -> width_stratified_brier emitted
+
+
+class TestMainGuardAndStart(unittest.TestCase):
+    def test_load_champion_start(self):
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, 'rfe.csv')
+            # RFE-by-count table: index = num_features, cols = feature slots
+            pd.DataFrame.from_dict({90: ['a', 'b'], 50: ['a', None]},
+                                   orient='index').to_csv(p)
+            self.assertEqual(blr.load_champion_start(p, 90), ['a', 'b'])
+
+    def test_main_rfe_raises_on_low_2025_coverage(self):
+        import tempfile, os
+        df = _synthetic(n_per_season=5)
+        # rename so the coverage guard sees a madden _ovr col with no 2025 coverage
+        df = df.rename(columns={'f_qb': 'target_madden_qb_ovr'})
+        df.loc[df['season'] == 2025, 'target_madden_qb_ovr'] = np.nan
+        with tempfile.TemporaryDirectory() as d:
+            pq = os.path.join(d, 'sw.parquet'); df.to_parquet(pq, index=False)
+            cs = os.path.join(d, 'cs.csv')
+            pd.DataFrame.from_dict({90: ['f_b']}, orient='index').to_csv(cs)
+            with self.assertRaises(RuntimeError):
+                blr.main(stage='rfe', parquet=pq, champion_start_csv=cs)

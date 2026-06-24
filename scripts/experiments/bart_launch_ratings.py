@@ -155,3 +155,59 @@ def run_final_bart(df, selected_features, *, m=50, draws=1000, tune=1000, chains
     preds = post.mean(dim=['chain', 'draw']).to_numpy()
     p_std = post.std(dim=['chain', 'draw']).to_numpy()
     return preds, p_std, holdout
+
+
+from scripts.experiments.xgb_launch_ratings import assert_madden_2025_coverage
+from data_science_utilities.models.bayes_logistic.evaluate import evaluate
+
+PARQUET = 'data/predict_games/input_data/schedule_and_weekly.parquet'
+CHAMPION_START_CSV = 'data/predict_games/model_features_in/rfe_features_kfolds_brier.csv'
+CHAMPION_START_COUNT = 90
+RFE_OUT = 'data/predict_games/model_features_in/bart_rfe_features_brier_madden.csv'
+RESULTS_DIR = 'data/predict_games/bart_launch_ratings'
+
+
+def load_champion_start(path, count):
+    """The non-madden champion start features (row `count` of the XGBoost RFE table)."""
+    table = pd.read_csv(path, index_col=0)
+    return list(table.loc[count, :].dropna().values)
+
+
+def main(stage='all', *, parquet=PARQUET, champion_start_csv=CHAMPION_START_CSV,
+         champion_start_count=CHAMPION_START_COUNT, rfe_out=RFE_OUT,
+         results_dir=RESULTS_DIR, selected=None):
+    df = pd.read_parquet(parquet)
+    assert_madden_2025_coverage(df)
+    best = selected
+    history = None
+
+    if stage in ('rfe', 'all'):
+        champ = load_champion_start(champion_start_csv, champion_start_count)
+        madden = madden_columns(list(df.columns))
+        start = build_start_pool(champ, madden)
+        print(f'BART RFE start pool: {len(start)} features ({len(madden)} madden)')
+        best, history = run_bart_rfe(df, start, rfe_out)
+        print(f'1-SE selected {len(best)} features ({len(madden_columns(best))} madden)')
+    if stage in ('final', 'all'):
+        if best is None:
+            best = list(pd.read_csv(rfe_out)['feature'])
+        if history is None:
+            # validation curve is an rfe-only artifact; standalone --stage final has none
+            history = pd.DataFrame({'num_features': [len(best)], 'validation_score': [float('nan')]})
+        preds, p_std, holdout = run_final_bart(df, best)
+        metrics = evaluate(holdout[TARGET].to_numpy(dtype=int), preds,
+                           p_std=p_std, weeks=holdout['week'])
+        os.makedirs(results_dir, exist_ok=True)
+        results = build_results(metrics, best, history, len(best))
+        with open(os.path.join(results_dir, 'results.json'), 'w') as fh:
+            json.dump(results, fh, indent=2)
+            fh.write('\n')
+        print(json.dumps(results['metrics'], indent=2))
+        print('champion deltas:', results['champion_deltas'])
+
+
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--stage', choices=['rfe', 'final', 'all'], default='all')
+    args = ap.parse_args()
+    main(stage=args.stage)
