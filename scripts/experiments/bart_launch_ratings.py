@@ -16,7 +16,10 @@ from data_science_utilities.models.bart.feature_selection.backward_elimination i
     BartBackwardElimination,
 )
 
-from scripts.experiments.xgb_launch_ratings import madden_columns
+from scripts.experiments.xgb_launch_ratings import (
+    madden_columns, assert_madden_2025_coverage,
+)
+from data_science_utilities.models.bayes_logistic.evaluate import evaluate
 
 RANDOM_SEED = 32
 TARGET = 'target_win'
@@ -156,9 +159,6 @@ def run_final_bart(df, selected_features, *, m=50, draws=1000, tune=1000, chains
     p_std = post.std(dim=['chain', 'draw']).to_numpy()
     return preds, p_std, holdout
 
-
-from scripts.experiments.xgb_launch_ratings import assert_madden_2025_coverage
-from data_science_utilities.models.bayes_logistic.evaluate import evaluate
 
 PARQUET = 'data/predict_games/input_data/schedule_and_weekly.parquet'
 CHAMPION_START_CSV = 'data/predict_games/model_features_in/rfe_features_kfolds_brier.csv'
