@@ -192,6 +192,7 @@ metrics are tracked:
 | 26 | 2026-06-19 | **Madden ratings, `_ovr` z-scored within season** (removes cross-era ratings drift; diffs kept raw-point), same base-vs-madden ablation | 6160→6348 | **+0.0129 delta** | — | **−0.0034 delta** |
 | 27 | 2026-06-20 | **Bayesian logistic regression** (PyMC, weakly-informative `Normal(0,1)` prior), same 54 features / split as run 6 | 54 | 0.695 | 0.657 | 0.2208 |
 | 28 | 2026-06-24 | **Madden launch ratings through RFE** — rank-only pool + 188 `madden_*` (incl. 2025 launch data from Phase 0) as RFE candidates for the first time; brier-1SE, XGBoost | 51 | 0.699 | 0.637 | 0.2211 |
+| 29 | 2026-06-24 | **Madden launch ratings, lean ablation-informed pool** — Madden LEVELS only + `schedule_points` + `pbp_phase2_directional` + context (1,954-col pool); brier-1SE, XGBoost | 25 | 0.700 | 0.642 | 0.2209 |
 
 **What changed between runs**
 
@@ -565,6 +566,42 @@ metrics are tracked:
     `... --stage grid --best-num-feats 51`; artifacts in `data/predict_games/xgb_launch_ratings/`
     and `models/best_random_xgb_model_launch_ratings.json`. (This phase also fixed a latent
     crash in the shared CV-RFE library when importance pruning stalls — see the PR.)
+- **Madden sub-structure ablations (Phase 1, 2026-06-24).** Two follow-up ablations dissected
+  *where* the Madden signal lives, decomposing the 188-column family two ways
+  (`scripts/experiments/madden_internal_ablation.py`; results under
+  `data/predict_games/group_ablation/madden_internal_*.json`):
+  - **By unit** (QB / offense-skill / O-line / D-front / coverage / matchup): **the QB unit
+    dominates** — Shapley **+0.0107** and unique leave-one-out **+0.0088**, ~7× any other unit;
+    every other unit is small and several have negative leave-one-out (redundant).
+  - **By measure** (talent `_ovr` levels vs the `_ovr_diff_*` momentum features): **levels carry
+    the signal** (Shapley +0.0139, LOO +0.0109); the 138 momentum/diff columns are **redundant**
+    (LOO −0.0012, level×diff interaction −0.006). So ~180 of the 188 Madden columns are dilution
+    around a QB-talent-level core.
+  - **Cross-family pairing** (`run_group_ablation.py` with `MADDEN_LEVELS_ONLY=1`, 8 families incl.
+    a 50-column Madden-levels block; `group_ablation_brier_madden_levels.json`): **Madden levels
+    are the single most valuable family** (Shapley +0.0056; the only family with meaningful unique
+    value, LOO +0.0038 — every PBP family is negative/redundant). But **all Madden×family
+    interactions are sub-additive** (no synergy): Madden *substitutes for* the other families'
+    team-quality signal rather than complementing it.
+- **Run 29 (Madden, lean ablation-informed pool — Phase 1, 2026-06-24):** acting on those
+  ablations, RFE ran on a much smaller pool — Madden **levels only** + the two families with
+  unique value (`schedule_points`, and `pbp_phase2_directional` chosen over `box_score` as the
+  PBP representative) + context (1,954 cols vs Run 28's 6,348), brier-1SE → **25 features**.
+  - **Madden now dominates the selected model: 16 of 25 features (64%)** are Madden levels, with
+    **`opp_madden_qb_ovr` the single most important feature** and `target_madden_qb_ovr` #5 —
+    up from 13/51 (25%) in Run 28's noisy full pool.
+  - **But the hold-out is unchanged: ROC-AUC 0.700 / accuracy 0.642 / Brier 0.2209**, statistically
+    identical to Run 28 (0.699/0.2211) and still ~0.7 AUROC points below the champions (XGB 11
+    0.707, BART 10 0.708; Brier ≈ XGB 0.2206). A more parsimonious model (25 vs 51 feats) at the
+    same Brier, not a better one.
+  - **Verdict (Phase 1, honest):** Madden launch ratings carry **real, selectable signal,
+    concentrated in QB talent levels** — a clean Madden-heavy model predicts nearly as well as the
+    champion from half the features. But Madden does **not break the documented hold-out ceiling**
+    (Runs 21–24): being *sub-additive*, it substitutes for the existing team-quality signal instead
+    of adding to it, so neither the full-pool (Run 28) nor the de-noised lean-pool (Run 29) model
+    beats the champion. Reproduce Run 29 with `--stage rfe --tag _run29 --madden-levels-only
+    --families madden_ratings,schedule_points,pbp_phase2_directional,context_rest` then
+    `--stage grid --best-num-feats 25 --tag _run29`.
 
 ## Feature-group ablation: are the feature families complementary or redundant?
 
