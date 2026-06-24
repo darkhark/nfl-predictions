@@ -1,0 +1,798 @@
+{
+  "metric": "brier",
+  "group_names": [
+    "oline",
+    "qb",
+    "offense_skill",
+    "dfront",
+    "coverage",
+    "matchup"
+  ],
+  "num_folds": 7,
+  "base_features_n": 8,
+  "group_sizes": {
+    "oline": 56,
+    "qb": 8,
+    "offense_skill": 64,
+    "dfront": 32,
+    "coverage": 24,
+    "matchup": 4
+  },
+  "shapley": {
+    "oline": {
+      "mean": 0.0009731393139331919,
+      "se": 0.0011825276032811686
+    },
+    "qb": {
+      "mean": 0.010647774978984394,
+      "se": 0.0017165767378772494
+    },
+    "offense_skill": {
+      "mean": 0.0008933136901852915,
+      "se": 0.0008457488180449796
+    },
+    "dfront": {
+      "mean": 0.0006628048558286742,
+      "se": 0.0013473495828954082
+    },
+    "coverage": {
+      "mean": 0.000788535832992672,
+      "se": 0.0005741606677785423
+    },
+    "matchup": {
+      "mean": 0.0014807078823159462,
+      "se": 0.0005613095013913724
+    }
+  },
+  "standalone": {
+    "oline": {
+      "mean": 0.0027820377958211857,
+      "se": 0.0014892587158849213
+    },
+    "qb": {
+      "mean": 0.01364182711504692,
+      "se": 0.001996349105087949
+    },
+    "offense_skill": {
+      "mean": 0.0028671582564586567,
+      "se": 0.0014398302163222175
+    },
+    "dfront": {
+      "mean": 0.001385274765378122,
+      "se": 0.002096393247963402
+    },
+    "coverage": {
+      "mean": 0.0013638235462012452,
+      "se": 0.0013349499598159854
+    },
+    "matchup": {
+      "mean": 0.005022432606659811,
+      "se": 0.0016217457869864135
+    }
+  },
+  "leave_one_out": {
+    "oline": {
+      "mean": -0.00017397394695070227,
+      "se": 0.0008579865384402509
+    },
+    "qb": {
+      "mean": 0.008769220605970237,
+      "se": 0.0013829630096083964
+    },
+    "offense_skill": {
+      "mean": -0.00026722686995756765,
+      "se": 0.0011642326093501667
+    },
+    "dfront": {
+      "mean": 0.0005434422541058882,
+      "se": 0.0010396365490569967
+    },
+    "coverage": {
+      "mean": 0.0005608933547552994,
+      "se": 0.0005686091802672708
+    },
+    "matchup": {
+      "mean": -0.0014090643514538734,
+      "se": 0.0009419318555315792
+    }
+  },
+  "interactions": [
+    {
+      "pair": [
+        "oline",
+        "qb"
+      ],
+      "mean": -0.0009327907138059891,
+      "se": 0.00039670575790417444
+    },
+    {
+      "pair": [
+        "offense_skill",
+        "oline"
+      ],
+      "mean": -0.0003636469082940674,
+      "se": 0.0004461384223947231
+    },
+    {
+      "pair": [
+        "dfront",
+        "oline"
+      ],
+      "mean": 0.00020703116500273643,
+      "se": 0.0005995483371053381
+    },
+    {
+      "pair": [
+        "coverage",
+        "oline"
+      ],
+      "mean": -0.0001662563255223791,
+      "se": 0.0002462479400391486
+    },
+    {
+      "pair": [
+        "matchup",
+        "oline"
+      ],
+      "mean": -0.0017003489601521884,
+      "se": 0.0004528363884016163
+    },
+    {
+      "pair": [
+        "offense_skill",
+        "qb"
+      ],
+      "mean": -0.0017262303335788599,
+      "se": 0.0006237507323731143
+    },
+    {
+      "pair": [
+        "dfront",
+        "qb"
+      ],
+      "mean": -0.0004002968285764024,
+      "se": 0.0006658472165558
+    },
+    {
+      "pair": [
+        "coverage",
+        "qb"
+      ],
+      "mean": -0.0005023184348091854,
+      "se": 0.0004883606651631303
+    },
+    {
+      "pair": [
+        "matchup",
+        "qb"
+      ],
+      "mean": -0.0013109701983062456,
+      "se": 0.00043287808513642437
+    },
+    {
+      "pair": [
+        "dfront",
+        "offense_skill"
+      ],
+      "mean": 0.000328194743828067,
+      "se": 0.000488335030976202
+    },
+    {
+      "pair": [
+        "coverage",
+        "offense_skill"
+      ],
+      "mean": -0.00048745043934180063,
+      "se": 0.00048625390547481147
+    },
+    {
+      "pair": [
+        "matchup",
+        "offense_skill"
+      ],
+      "mean": -0.0008852521890295588,
+      "se": 0.0005103048462630336
+    },
+    {
+      "pair": [
+        "coverage",
+        "dfront"
+      ],
+      "mean": 0.0009556295136632374,
+      "se": 0.0004575347092146444
+    },
+    {
+      "pair": [
+        "dfront",
+        "matchup"
+      ],
+      "mean": -0.0019323911051898671,
+      "se": 0.0005824451783419825
+    },
+    {
+      "pair": [
+        "coverage",
+        "matchup"
+      ],
+      "mean": -0.0006025345054358203,
+      "se": 0.00035222000457486006
+    }
+  ],
+  "mean_scores": [
+    {
+      "groups": [],
+      "n": 0,
+      "mean": 0.25074559845301214
+    },
+    {
+      "groups": [
+        "oline"
+      ],
+      "n": 1,
+      "mean": 0.24796356065719097
+    },
+    {
+      "groups": [
+        "qb"
+      ],
+      "n": 1,
+      "mean": 0.2371037713379652
+    },
+    {
+      "groups": [
+        "offense_skill"
+      ],
+      "n": 1,
+      "mean": 0.24787844019655347
+    },
+    {
+      "groups": [
+        "dfront"
+      ],
+      "n": 1,
+      "mean": 0.249360323687634
+    },
+    {
+      "groups": [
+        "coverage"
+      ],
+      "n": 1,
+      "mean": 0.24938177490681088
+    },
+    {
+      "groups": [
+        "matchup"
+      ],
+      "n": 1,
+      "mean": 0.24572316584635231
+    },
+    {
+      "groups": [
+        "oline",
+        "qb"
+      ],
+      "n": 2,
+      "mean": 0.2366527738466989
+    },
+    {
+      "groups": [
+        "offense_skill",
+        "oline"
+      ],
+      "n": 2,
+      "mean": 0.24678031684118978
+    },
+    {
+      "groups": [
+        "dfront",
+        "oline"
+      ],
+      "n": 2,
+      "mean": 0.2475145372443353
+    },
+    {
+      "groups": [
+        "coverage",
+        "oline"
+      ],
+      "n": 2,
+      "mean": 0.24774543092461596
+    },
+    {
+      "groups": [
+        "matchup",
+        "oline"
+      ],
+      "n": 2,
+      "mean": 0.24608905127560612
+    },
+    {
+      "groups": [
+        "offense_skill",
+        "qb"
+      ],
+      "n": 2,
+      "mean": 0.23717713320591602
+    },
+    {
+      "groups": [
+        "dfront",
+        "qb"
+      ],
+      "n": 2,
+      "mean": 0.23726500787908839
+    },
+    {
+      "groups": [
+        "coverage",
+        "qb"
+      ],
+      "n": 2,
+      "mean": 0.23691058534229467
+    },
+    {
+      "groups": [
+        "matchup",
+        "qb"
+      ],
+      "n": 2,
+      "mean": 0.2342375966502257
+    },
+    {
+      "groups": [
+        "dfront",
+        "offense_skill"
+      ],
+      "n": 2,
+      "mean": 0.2475984341284376
+    },
+    {
+      "groups": [
+        "coverage",
+        "offense_skill"
+      ],
+      "n": 2,
+      "mean": 0.247819119271867
+    },
+    {
+      "groups": [
+        "matchup",
+        "offense_skill"
+      ],
+      "n": 2,
+      "mean": 0.24508047725391982
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront"
+      ],
+      "n": 2,
+      "mean": 0.24723269114025717
+    },
+    {
+      "groups": [
+        "dfront",
+        "matchup"
+      ],
+      "n": 2,
+      "mean": 0.2474815503458427
+    },
+    {
+      "groups": [
+        "coverage",
+        "matchup"
+      ],
+      "n": 2,
+      "mean": 0.24528764923615895
+    },
+    {
+      "groups": [
+        "offense_skill",
+        "oline",
+        "qb"
+      ],
+      "n": 3,
+      "mean": 0.23618009763508363
+    },
+    {
+      "groups": [
+        "dfront",
+        "oline",
+        "qb"
+      ],
+      "n": 3,
+      "mean": 0.23569788634083702
+    },
+    {
+      "groups": [
+        "coverage",
+        "oline",
+        "qb"
+      ],
+      "n": 3,
+      "mean": 0.23570326501422842
+    },
+    {
+      "groups": [
+        "matchup",
+        "oline",
+        "qb"
+      ],
+      "n": 3,
+      "mean": 0.23474072173533028
+    },
+    {
+      "groups": [
+        "dfront",
+        "offense_skill",
+        "oline"
+      ],
+      "n": 3,
+      "mean": 0.2448678081962319
+    },
+    {
+      "groups": [
+        "coverage",
+        "offense_skill",
+        "oline"
+      ],
+      "n": 3,
+      "mean": 0.24596543505591595
+    },
+    {
+      "groups": [
+        "matchup",
+        "offense_skill",
+        "oline"
+      ],
+      "n": 3,
+      "mean": 0.2441903352894213
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "oline"
+      ],
+      "n": 3,
+      "mean": 0.24413170480326268
+    },
+    {
+      "groups": [
+        "dfront",
+        "matchup",
+        "oline"
+      ],
+      "n": 3,
+      "mean": 0.24592851524074982
+    },
+    {
+      "groups": [
+        "coverage",
+        "matchup",
+        "oline"
+      ],
+      "n": 3,
+      "mean": 0.24565345987841322
+    },
+    {
+      "groups": [
+        "dfront",
+        "offense_skill",
+        "qb"
+      ],
+      "n": 3,
+      "mean": 0.23567204781204754
+    },
+    {
+      "groups": [
+        "coverage",
+        "offense_skill",
+        "qb"
+      ],
+      "n": 3,
+      "mean": 0.23740467572778765
+    },
+    {
+      "groups": [
+        "matchup",
+        "offense_skill",
+        "qb"
+      ],
+      "n": 3,
+      "mean": 0.2355888442005573
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "qb"
+      ],
+      "n": 3,
+      "mean": 0.23686156668957598
+    },
+    {
+      "groups": [
+        "dfront",
+        "matchup",
+        "qb"
+      ],
+      "n": 3,
+      "mean": 0.2360230321571188
+    },
+    {
+      "groups": [
+        "coverage",
+        "matchup",
+        "qb"
+      ],
+      "n": 3,
+      "mean": 0.23517578739593747
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "offense_skill"
+      ],
+      "n": 3,
+      "mean": 0.24524714126936037
+    },
+    {
+      "groups": [
+        "dfront",
+        "matchup",
+        "offense_skill"
+      ],
+      "n": 3,
+      "mean": 0.2460786669694761
+    },
+    {
+      "groups": [
+        "coverage",
+        "matchup",
+        "offense_skill"
+      ],
+      "n": 3,
+      "mean": 0.2451333865254471
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "matchup"
+      ],
+      "n": 3,
+      "mean": 0.24587260390233504
+    },
+    {
+      "groups": [
+        "dfront",
+        "offense_skill",
+        "oline",
+        "qb"
+      ],
+      "n": 4,
+      "mean": 0.23559957336241102
+    },
+    {
+      "groups": [
+        "coverage",
+        "offense_skill",
+        "oline",
+        "qb"
+      ],
+      "n": 4,
+      "mean": 0.23642797040152058
+    },
+    {
+      "groups": [
+        "matchup",
+        "offense_skill",
+        "oline",
+        "qb"
+      ],
+      "n": 4,
+      "mean": 0.23591799071558928
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "oline",
+        "qb"
+      ],
+      "n": 4,
+      "mean": 0.23456507525424972
+    },
+    {
+      "groups": [
+        "dfront",
+        "matchup",
+        "oline",
+        "qb"
+      ],
+      "n": 4,
+      "mean": 0.23626364735290428
+    },
+    {
+      "groups": [
+        "coverage",
+        "matchup",
+        "oline",
+        "qb"
+      ],
+      "n": 4,
+      "mean": 0.23504640274582625
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "offense_skill",
+        "oline"
+      ],
+      "n": 4,
+      "mean": 0.2441009849956734
+    },
+    {
+      "groups": [
+        "dfront",
+        "matchup",
+        "offense_skill",
+        "oline"
+      ],
+      "n": 4,
+      "mean": 0.24420390850629
+    },
+    {
+      "groups": [
+        "coverage",
+        "matchup",
+        "offense_skill",
+        "oline"
+      ],
+      "n": 4,
+      "mean": 0.2440553206980777
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "matchup",
+        "oline"
+      ],
+      "n": 4,
+      "mean": 0.24524708556520722
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "offense_skill",
+        "qb"
+      ],
+      "n": 4,
+      "mean": 0.23556681175448005
+    },
+    {
+      "groups": [
+        "dfront",
+        "matchup",
+        "offense_skill",
+        "qb"
+      ],
+      "n": 4,
+      "mean": 0.23584806006009765
+    },
+    {
+      "groups": [
+        "coverage",
+        "matchup",
+        "offense_skill",
+        "qb"
+      ],
+      "n": 4,
+      "mean": 0.23543958498747694
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "matchup",
+        "qb"
+      ],
+      "n": 4,
+      "mean": 0.23501861467962543
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "matchup",
+        "offense_skill"
+      ],
+      "n": 4,
+      "mean": 0.24397889317815932
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "offense_skill",
+        "oline",
+        "qb"
+      ],
+      "n": 5,
+      "mean": 0.23389025754731813
+    },
+    {
+      "groups": [
+        "dfront",
+        "matchup",
+        "offense_skill",
+        "oline",
+        "qb"
+      ],
+      "n": 5,
+      "mean": 0.23586021525352727
+    },
+    {
+      "groups": [
+        "coverage",
+        "matchup",
+        "offense_skill",
+        "oline",
+        "qb"
+      ],
+      "n": 5,
+      "mean": 0.2358427641528779
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "matchup",
+        "oline",
+        "qb"
+      ],
+      "n": 5,
+      "mean": 0.23503209502881436
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "matchup",
+        "offense_skill",
+        "oline"
+      ],
+      "n": 5,
+      "mean": 0.2440685425047422
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "matchup",
+        "offense_skill",
+        "qb"
+      ],
+      "n": 5,
+      "mean": 0.23512534795182125
+    },
+    {
+      "groups": [
+        "coverage",
+        "dfront",
+        "matchup",
+        "offense_skill",
+        "oline",
+        "qb"
+      ],
+      "n": 6,
+      "mean": 0.23529932189877195
+    }
+  ]
+}

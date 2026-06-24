@@ -50,8 +50,11 @@ PARQUET = os.path.join(REPO_ROOT, 'data', 'predict_games', 'input_data',
 OUT_DIR = os.path.join(REPO_ROOT, 'data', 'predict_games', 'group_ablation')
 os.makedirs(OUT_DIR, exist_ok=True)
 PROGRESS_LOG = os.environ.get('PROGRESS_LOG', '/tmp/group_ablation_progress.log')
-RESULT_JSON = os.path.join(OUT_DIR, f'group_ablation_{SELECTION_METRIC}.json')
-HEATMAP_PNG = os.path.join(OUT_DIR, f'group_interaction_{SELECTION_METRIC}.png')
+# Optional output-name suffix so a re-run (e.g. with madden_ratings now in the parquet)
+# does not clobber a prior result. Empty by default = original filenames.
+RESULT_SUFFIX = os.environ.get('RESULT_SUFFIX', '')
+RESULT_JSON = os.path.join(OUT_DIR, f'group_ablation_{SELECTION_METRIC}{RESULT_SUFFIX}.json')
+HEATMAP_PNG = os.path.join(OUT_DIR, f'group_interaction_{SELECTION_METRIC}{RESULT_SUFFIX}.png')
 
 
 def log(msg):
