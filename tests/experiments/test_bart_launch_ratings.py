@@ -28,6 +28,7 @@ class TestPureHelpers(unittest.TestCase):
         self.assertEqual(set(tr['season']), {2019, 2021})
         self.assertEqual(set(va['season']), {2022, 2023})
         self.assertEqual(set(ho['season']), {2024, 2025})
+        self.assertEqual(len(tr) + len(va) + len(ho), 6)  # no row loss/duplication
 
     def test_build_results(self):
         metrics = {'auroc': 0.71, 'brier': 0.218}
@@ -38,4 +39,5 @@ class TestPureHelpers(unittest.TestCase):
         self.assertEqual(res['n_madden'], 1)
         self.assertIn('bart_run10_auroc_delta', res['champion_deltas'])
         self.assertAlmostEqual(res['champion_deltas']['bart_run10_auroc_delta'], 0.71 - 0.708, places=4)
+        self.assertAlmostEqual(res['champion_deltas']['bart_run6_auroc_delta'], 0.71 - 0.705, places=4)
         self.assertEqual(len(res['validation_curve']), 2)

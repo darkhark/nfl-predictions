@@ -6,6 +6,7 @@ in-repo BartBackwardElimination + bayes_logistic.evaluate. NaN -> -100 sentinel.
 import argparse
 import json
 import os
+import numpy as np
 import pandas as pd
 
 from scripts.experiments.xgb_launch_ratings import madden_columns
@@ -33,7 +34,6 @@ def build_start_pool(champion_start, madden_cols):
 
 def to_bart_matrix(df, features):
     """df[features] with NaN -> -100 sentinel as a float matrix (BART cannot ingest NaN)."""
-    import numpy as np
     X = df[features].fillna(BART_NAN_SENTINEL).to_numpy(dtype=float)
     assert not np.isnan(X).any(), 'NaN remains after sentinel fill'
     return X
