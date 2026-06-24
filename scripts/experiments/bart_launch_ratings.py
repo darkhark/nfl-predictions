@@ -132,3 +132,26 @@ def run_bart_rfe(df, start_features, out_csv, *, fit_fn=None, replicates=6, max_
     os.makedirs(os.path.dirname(out_csv) or '.', exist_ok=True)
     pd.DataFrame({'feature': best}).to_csv(out_csv, index=False)
     return best, history
+
+
+def run_final_bart(df, selected_features, *, m=50, draws=1000, tune=1000, chains=4, cores=4):
+    """Final probit BART on the selected set; returns (holdout posterior-mean preds,
+    posterior std, holdout_df). The std feeds the width-stratified Brier."""
+    train, _, holdout = split_seasons(df)
+    y_train = train[TARGET].to_numpy(dtype=int)
+    X_train = to_bart_matrix(train, selected_features)
+    X_holdout = to_bart_matrix(holdout, selected_features)
+    with pm.Model():
+        X_data = pm.Data('X', X_train)
+        mu = pmb.BART('mu', X_data, y_train, m=m)
+        p = pm.Deterministic('p', pm.math.invprobit(mu))
+        pm.Bernoulli('y', p=p, observed=y_train, shape=mu.shape)
+        idata = pm.sample(draws=draws, tune=tune, chains=chains, cores=cores,
+                          random_seed=RANDOM_SEED, progressbar=False)
+        pm.set_data({'X': X_holdout})
+        ppc = pm.sample_posterior_predictive(
+            idata, var_names=['p'], random_seed=RANDOM_SEED, progressbar=False)
+    post = ppc.posterior_predictive['p']
+    preds = post.mean(dim=['chain', 'draw']).to_numpy()
+    p_std = post.std(dim=['chain', 'draw']).to_numpy()
+    return preds, p_std, holdout

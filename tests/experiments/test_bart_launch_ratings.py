@@ -89,3 +89,19 @@ class TestBartFitContract(unittest.TestCase):
         self.assertIsInstance(out['validation_score'], float)
         self.assertIsInstance(out['variable_inclusion'], pd.Series)
         self.assertEqual(set(out['variable_inclusion'].index), {'f_qb', 'f_b', 'f_c'})
+
+
+class TestRunFinalBart(unittest.TestCase):
+    def test_tiny_real_final_fit_and_eval(self):
+        from data_science_utilities.models.bayes_logistic.evaluate import evaluate
+        df = _synthetic(n_per_season=25)
+        preds, p_std, holdout = blr.run_final_bart(
+            df, ['f_qb', 'f_b', 'f_c'], draws=20, tune=20, chains=1, cores=1)
+        self.assertEqual(len(preds), len(holdout))
+        self.assertEqual(len(p_std), len(holdout))
+        self.assertTrue(((preds >= 0) & (preds <= 1)).all())
+        metrics = evaluate(holdout['target_win'].to_numpy(int), preds,
+                           p_std=p_std, weeks=holdout['week'])
+        for k in ('auroc', 'brier', 'per_week_auroc_mean',
+                  'width_stratified_brier', 'reliability_curve'):
+            self.assertIn(k, metrics)   # p_std present -> width_stratified_brier emitted
