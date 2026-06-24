@@ -123,3 +123,33 @@ class TestMainGuard(unittest.TestCase):
                                       'target_win']}).to_csv(fl, index=False)
             with self.assertRaises(RuntimeError):
                 xlr.main(stage='rfe', parquet=pq, features_list=fl)
+
+
+class TestRestrictToFamilies(unittest.TestCase):
+    def test_keeps_only_requested_families(self):
+        feats = ['target_madden_qb_ovr',            # madden_ratings
+                 'off_target_epa_per_play_rank',     # pbp_phase1
+                 'off_target_passing_yards',         # box_score
+                 'week',                             # context_rest
+                 'target_win']                       # unclassified -> dropped
+        kept = xlr.restrict_to_families(feats, ['madden_ratings', 'context_rest'])
+        self.assertIn('target_madden_qb_ovr', kept)
+        self.assertIn('week', kept)
+        self.assertNotIn('off_target_epa_per_play_rank', kept)
+        self.assertNotIn('off_target_passing_yards', kept)
+        self.assertNotIn('target_win', kept)
+
+
+class TestDropMaddenDiffs(unittest.TestCase):
+    def test_keeps_levels_drops_diffs(self):
+        feats = ['target_madden_qb_ovr',                 # level -> kept
+                 'target_madden_qb_ovr_diff_prev',        # diff -> dropped
+                 'opp_madden_edge_ovr_diff_4g',           # diff -> dropped
+                 'madden_matchup_pass_pro',               # matchup level -> kept
+                 'off_target_epa_per_play_rank']          # non-madden -> kept
+        out = xlr.drop_madden_diffs(feats)
+        self.assertIn('target_madden_qb_ovr', out)
+        self.assertIn('madden_matchup_pass_pro', out)
+        self.assertIn('off_target_epa_per_play_rank', out)
+        self.assertNotIn('target_madden_qb_ovr_diff_prev', out)
+        self.assertNotIn('opp_madden_edge_ovr_diff_4g', out)

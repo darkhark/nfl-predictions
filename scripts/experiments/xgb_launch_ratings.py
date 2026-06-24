@@ -29,6 +29,28 @@ def build_rfe_pool(candidate_features):
             if f != TARGET and partition.is_rank_only_kept(f)]
 
 
+def restrict_to_families(features, keep_families):
+    """Keep only features whose content family is in keep_families (Run 29's
+    ablation-informed smaller pool). Names that don't classify (e.g. the target) drop."""
+    keep = set(keep_families)
+    out = []
+    for f in features:
+        try:
+            fam = partition.content_family(f)
+        except ValueError:
+            continue
+        if fam in keep:
+            out.append(f)
+    return out
+
+
+def drop_madden_diffs(features):
+    """Drop the Madden momentum/diff columns, keeping only the talent-level _ovr (and
+    matchup) features. The internal sub-ablation showed the diffs are redundant
+    (negative leave-one-out), so Run 29 pairs the clean level signal only."""
+    return [f for f in features if not ('madden' in f and '_diff_' in f)]
+
+
 def madden_columns(features):
     return [f for f in features if 'madden' in f]
 
@@ -151,11 +173,27 @@ RESULTS_DIR = 'data/predict_games/xgb_launch_ratings'
 MODEL_OUT = 'models/best_random_xgb_model_launch_ratings.json'
 
 
+def _tagged(path, tag):
+    """Suffix a file path before its extension (or a dir path) with `tag`."""
+    if not tag:
+        return path
+    root, ext = os.path.splitext(path)
+    return f'{root}{tag}{ext}'
+
+
 def main(stage='all', *, parquet=PARQUET, features_list=FEATURES_LIST, rfe_out=RFE_OUT,
-         results_dir=RESULTS_DIR, model_out=MODEL_OUT, best_num_feats=None):
+         results_dir=RESULTS_DIR, model_out=MODEL_OUT, best_num_feats=None,
+         families=None, tag='', madden_levels_only=False):
+    rfe_out = _tagged(rfe_out, tag)
+    model_out = _tagged(model_out, tag)
+    results_dir = results_dir + tag
     df = pd.read_parquet(parquet)
     assert_madden_2025_coverage(df)
     candidates = list(pd.read_csv(features_list)['feature'])
+    if families:
+        candidates = restrict_to_families(candidates, families)
+    if madden_levels_only:
+        candidates = drop_madden_diffs(candidates)
 
     if stage in ('rfe', 'all'):
         best_num_feats, _ = run_rfe(df, candidates, rfe_out)
@@ -180,5 +218,12 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser()
     ap.add_argument('--stage', choices=['rfe', 'grid', 'all'], default='all')
     ap.add_argument('--best-num-feats', type=int, default=None)
+    ap.add_argument('--families', type=lambda s: s.split(','), default=None,
+                    help='comma-separated content families to restrict the RFE pool to')
+    ap.add_argument('--tag', type=str, default='',
+                    help='suffix for the rfe-csv / results-dir / model output paths')
+    ap.add_argument('--madden-levels-only', action='store_true',
+                    help='drop the 138 madden _ovr_diff_* columns, keeping only talent levels')
     args = ap.parse_args()
-    main(stage=args.stage, best_num_feats=args.best_num_feats)
+    main(stage=args.stage, best_num_feats=args.best_num_feats,
+         families=args.families, tag=args.tag, madden_levels_only=args.madden_levels_only)
