@@ -1,0 +1,80 @@
+{
+  "config": {
+    "seed": 32,
+    "selection_metric": "brier",
+    "rank_only": true,
+    "best_num_feats": 51
+  },
+  "n_selected": 51,
+  "madden_selected": [
+    "opp_madden_qb_ovr",
+    "target_madden_qb_ovr",
+    "opp_madden_backfield_ovr",
+    "target_madden_edge_ovr",
+    "target_madden_rb_ovr",
+    "opp_madden_interior_ol_ovr",
+    "madden_matchup_pass_pro",
+    "opp_madden_edge_ovr",
+    "target_madden_receivers_ovr",
+    "target_madden_interior_ol_ovr",
+    "target_madden_exterior_ol_ovr",
+    "opp_madden_cornerback_ovr",
+    "opp_madden_receivers_ovr"
+  ],
+  "madden_importance_rank": {
+    "opp_madden_qb_ovr": 3,
+    "target_madden_qb_ovr": 2,
+    "opp_madden_backfield_ovr": 15,
+    "target_madden_edge_ovr": 8,
+    "target_madden_rb_ovr": 16,
+    "opp_madden_interior_ol_ovr": 33,
+    "madden_matchup_pass_pro": 21,
+    "opp_madden_edge_ovr": 13,
+    "target_madden_receivers_ovr": 24,
+    "target_madden_interior_ol_ovr": 39,
+    "target_madden_exterior_ol_ovr": 40,
+    "opp_madden_cornerback_ovr": 36,
+    "opp_madden_receivers_ovr": 27
+  },
+  "metrics": {
+    "auroc": 0.699093722967128,
+    "accuracy": 0.6369485294117647,
+    "brier": 0.22113665272988167,
+    "logloss": 0.6328762502552386,
+    "per_week_auroc_mean": 0.6948471392603864,
+    "reliability_curve": {
+      "prob_true": [
+        0.22018348623853212,
+        0.28440366972477066,
+        0.3302752293577982,
+        0.4722222222222222,
+        0.48623853211009177,
+        0.5688073394495413,
+        0.49074074074074076,
+        0.6330275229357798,
+        0.7339449541284404,
+        0.7798165137614679
+      ],
+      "prob_pred": [
+        0.27063537122459586,
+        0.3411353938623306,
+        0.39232795200216664,
+        0.43871359720274256,
+        0.4778860446509965,
+        0.5143124135809207,
+        0.5584275816325788,
+        0.6007983115834927,
+        0.6527204825243819,
+        0.7258452630917961
+      ]
+    }
+  },
+  "champion_deltas": {
+    "xgb_run11_auroc_delta": -0.0079,
+    "xgb_run11_brier_delta": 0.0005,
+    "bart_run6_auroc_delta": -0.0059,
+    "bart_run6_brier_delta": 0.0017,
+    "bart_run10_auroc_delta": -0.0089,
+    "bart_run10_brier_delta": 0.0026
+  }
+}
