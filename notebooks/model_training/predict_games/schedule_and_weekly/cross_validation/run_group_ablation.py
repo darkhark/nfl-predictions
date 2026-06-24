@@ -71,6 +71,11 @@ def main():
           .sample(frac=1, random_state=RANDOM_SEED).reset_index(drop=True))
 
     groups = partition_features(list(df.columns), rank_only=RANK_ONLY)
+    # Optionally restrict the madden block to its talent-LEVEL columns (drop the _ovr_diff_*
+    # momentum features). The madden-internal sub-ablation showed the diffs are redundant
+    # (negative leave-one-out), so this pairs the *clean* madden signal against the families.
+    if os.environ.get('MADDEN_LEVELS_ONLY') == '1' and 'madden_ratings' in groups:
+        groups['madden_ratings'] = [c for c in groups['madden_ratings'] if '_diff_' not in c]
     base_features = groups['context_rest']
     toggle_groups = {n: c for n, c in groups.items()
                      if n != 'context_rest' and len(c) > 0}
