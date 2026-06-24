@@ -6,8 +6,15 @@ in-repo BartBackwardElimination + bayes_logistic.evaluate. NaN -> -100 sentinel.
 import argparse
 import json
 import os
+import time
 import numpy as np
 import pandas as pd
+import pymc as pm
+import pymc_bart as pmb
+from sklearn.metrics import brier_score_loss
+from data_science_utilities.models.bart.feature_selection.backward_elimination import (
+    BartBackwardElimination,
+)
 
 from scripts.experiments.xgb_launch_ratings import madden_columns
 
@@ -66,3 +73,60 @@ def build_results(metrics, selected_features, history, best_num_feats):
                               'val_brier': float(r['validation_score'])}
                              for _, r in history.iterrows()],
     }
+
+
+_RFE_PROGRESS_LOG = '/tmp/bart_launch_rfe_progress.log'
+
+
+def _log_iter(row):
+    with open(_RFE_PROGRESS_LOG, 'a') as fh:
+        fh.write(f"iter: {row['num_features']} features, "
+                 f"val_brier {row['validation_score']:.4f}\n")
+
+
+def make_bart_fit(train_df, valid_df, y_train, y_valid, *,
+                  m=50, draws=500, tune=1000, chains=2, cores=2):
+    """Build a selection-grade BART fit_fn: train probit BART on <2022, score the
+    2022-2023 validation slice with Brier, return chain-averaged variable_inclusion."""
+    def bart_fit(features, seed):
+        t0 = time.perf_counter()
+        X_train = to_bart_matrix(train_df, features)
+        X_valid = to_bart_matrix(valid_df, features)
+        with pm.Model():
+            X_data = pm.Data('X', X_train)
+            mu = pmb.BART('mu', X_data, y_train, m=m)
+            p = pm.Deterministic('p', pm.math.invprobit(mu))
+            pm.Bernoulli('y', p=p, observed=y_train, shape=mu.shape)
+            idata = pm.sample(draws=draws, tune=tune, chains=chains, cores=cores,
+                              random_seed=seed, progressbar=False)
+            pm.set_data({'X': X_valid})
+            ppc = pm.sample_posterior_predictive(
+                idata, var_names=['p'], random_seed=seed, progressbar=False)
+        valid_preds = ppc.posterior_predictive['p'].mean(dim=['chain', 'draw']).to_numpy()
+        inclusion = pd.Series(
+            idata.sample_stats['variable_inclusion'].mean(dim=['chain', 'draw']).to_numpy(),
+            index=features)
+        with open(_RFE_PROGRESS_LOG, 'a') as fh:
+            fh.write(f"  fit: {len(features)} feat seed {seed} "
+                     f"{time.perf_counter() - t0:.0f}s\n")
+        return {'validation_score': float(brier_score_loss(y_valid, valid_preds)),
+                'variable_inclusion': inclusion}
+    return bart_fit
+
+
+def run_bart_rfe(df, start_features, out_csv, *, fit_fn=None, replicates=6, max_workers=6,
+                 drop_rate=0.2, min_features=10, fit_kwargs=None):
+    """BART backward-elimination from start_features; writes the selected set (brier-1SE)
+    and returns (best_features, history). Inject fit_fn for tests; else build a real one."""
+    train, valid, _ = split_seasons(df)
+    if fit_fn is None:
+        fit_fn = make_bart_fit(train, valid, train[TARGET].to_numpy(dtype=int),
+                               valid[TARGET].to_numpy(dtype=int), **(fit_kwargs or {}))
+    rfe = BartBackwardElimination(fit_fn, drop_rate=drop_rate, min_features=min_features,
+                                  replicates=replicates, max_workers=max_workers,
+                                  base_seed=RANDOM_SEED, on_iteration=_log_iter)
+    history = rfe.run(start_features)
+    best = rfe.get_best_features_1se(higher_is_better=False)
+    os.makedirs(os.path.dirname(out_csv) or '.', exist_ok=True)
+    pd.DataFrame({'feature': best}).to_csv(out_csv, index=False)
+    return best, history

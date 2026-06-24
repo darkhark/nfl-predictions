@@ -41,3 +41,51 @@ class TestPureHelpers(unittest.TestCase):
         self.assertAlmostEqual(res['champion_deltas']['bart_run10_auroc_delta'], 0.71 - 0.708, places=4)
         self.assertAlmostEqual(res['champion_deltas']['bart_run6_auroc_delta'], 0.71 - 0.705, places=4)
         self.assertEqual(len(res['validation_curve']), 2)
+
+
+def _synthetic(n_per_season=40):
+    rng = np.random.default_rng(0)
+    rows = []
+    for s in (2019, 2020, 2021, 2022, 2023, 2024, 2025):
+        for i in range(n_per_season):
+            sig = rng.normal()
+            rows.append({'season': s, 'week': (i % 5) + 1,
+                         'f_qb': sig + rng.normal(0, 0.2),
+                         'f_b': rng.normal(), 'f_c': rng.normal(),
+                         'target_win': int(sig + rng.normal(0, 0.5) > 0)})
+    return pd.DataFrame(rows)
+
+
+class TestRunBartRfeWiring(unittest.TestCase):
+    def test_rfe_uses_fit_fn_and_writes_csv(self):
+        # Stub fit_fn: instant, deterministic; importance favors f_qb so it survives.
+        def stub_fit(features, seed):
+            incl = pd.Series({f: (3.0 if f == 'f_qb' else 1.0) for f in features})
+            return {'validation_score': 0.22 - 0.001 * (3 - len(features)),
+                    'variable_inclusion': incl}
+        df = _synthetic()
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, 'bart_rfe.csv')
+            best, hist = blr.run_bart_rfe(
+                df, ['f_qb', 'f_b', 'f_c'], out, fit_fn=stub_fit,
+                replicates=1, max_workers=1, min_features=1)
+            self.assertTrue(os.path.exists(out))
+            self.assertIn('f_qb', best)                 # highest importance survives
+            self.assertIn('feature', pd.read_csv(out).columns)
+            self.assertGreaterEqual(len(hist), 1)
+
+
+class TestBartFitContract(unittest.TestCase):
+    def test_tiny_real_fit_returns_contract(self):
+        # ONE tiny real PyMC BART fit (slow ~20-40s) to prove the model + return shape.
+        df = _synthetic(n_per_season=20)
+        tr, va, _ = blr.split_seasons(df)
+        fit = blr.make_bart_fit(tr, va, tr['target_win'].to_numpy(int),
+                                va['target_win'].to_numpy(int),
+                                draws=20, tune=20, chains=1, cores=1)
+        out = fit(['f_qb', 'f_b', 'f_c'], seed=32)
+        self.assertIn('validation_score', out)
+        self.assertIsInstance(out['validation_score'], float)
+        self.assertIsInstance(out['variable_inclusion'], pd.Series)
+        self.assertEqual(set(out['variable_inclusion'].index), {'f_qb', 'f_b', 'f_c'})
