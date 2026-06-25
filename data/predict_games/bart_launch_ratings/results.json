@@ -1,0 +1,201 @@
+{
+  "config": {
+    "seed": 32,
+    "selection_metric": "brier",
+    "nan_sentinel": -100.0,
+    "best_num_feats": 144
+  },
+  "n_selected": 144,
+  "madden_selected": [
+    "target_madden_qb_ovr",
+    "opp_madden_qb_ovr",
+    "target_madden_exterior_ol_ovr",
+    "target_madden_wr3_ovr",
+    "target_madden_edge_ovr",
+    "madden_matchup_skill_cover",
+    "target_madden_interior_ol_ovr",
+    "opp_madden_interior_ol_ovr",
+    "opp_madden_edge_ovr",
+    "opp_madden_wr3_ovr",
+    "opp_madden_te_ovr",
+    "target_madden_interior_ol_ovr_diff_prev_season",
+    "opp_madden_rb_ovr_diff_prev_season",
+    "opp_madden_wr3_ovr_diff_prev_season",
+    "madden_matchup_pass_rush",
+    "opp_madden_tight_end_ovr_diff_prev",
+    "opp_madden_exterior_ol_ovr",
+    "target_madden_backfield_ovr_diff_prev_season",
+    "opp_madden_qb_ovr_diff_prev_season",
+    "opp_madden_linebacker_ovr",
+    "target_madden_wr3_ovr_diff_prev_season",
+    "opp_madden_edge_right_ovr_diff_prev_season",
+    "target_madden_tight_end_ovr",
+    "target_madden_safety_ovr",
+    "opp_madden_receivers_ovr",
+    "opp_madden_rb_ovr",
+    "opp_madden_linebacker_ovr_diff_4g",
+    "target_madden_rb_ovr_diff_prev_season",
+    "opp_madden_lt_ovr_diff_4g",
+    "opp_madden_cornerback_ovr",
+    "madden_matchup_pass_pro",
+    "target_madden_safety_ovr_diff_prev",
+    "target_madden_exterior_ol_ovr_diff_prev_season",
+    "target_madden_linebacker_ovr_diff_4g",
+    "opp_madden_interior_dl_ovr_diff_prev",
+    "opp_madden_safety_ovr",
+    "opp_madden_exterior_ol_ovr_diff_prev_season",
+    "target_madden_safety_ovr_diff_4g",
+    "opp_madden_interior_ol_ovr_diff_prev_season",
+    "target_madden_lt_ovr",
+    "target_madden_rb_ovr",
+    "target_madden_linebacker_ovr_diff_prev",
+    "target_madden_backfield_ovr",
+    "target_madden_cornerback_ovr",
+    "target_madden_edge_right_ovr_diff_prev_season",
+    "opp_madden_tight_end_ovr_diff_4g",
+    "opp_madden_exterior_ol_ovr_diff_prev",
+    "target_madden_c_ovr_diff_prev_season",
+    "target_madden_tight_end_ovr_diff_4g",
+    "opp_madden_wr1_ovr",
+    "target_madden_c_ovr_diff_4g",
+    "opp_madden_edge_right_ovr",
+    "target_madden_receivers_ovr",
+    "opp_madden_edge_right_ovr_diff_4g",
+    "target_madden_linebacker_ovr_diff_prev_season",
+    "target_madden_edge_right_ovr",
+    "target_madden_qb_ovr_diff_prev_season",
+    "opp_madden_edge_left_ovr_diff_4g",
+    "target_madden_cornerback_ovr_diff_4g",
+    "target_madden_edge_left_ovr_diff_4g",
+    "target_madden_tight_end_ovr_diff_prev",
+    "opp_madden_backfield_ovr",
+    "opp_madden_lt_ovr_diff_prev_season",
+    "target_madden_lt_ovr_diff_prev",
+    "opp_madden_rt_ovr_diff_prev",
+    "target_madden_rg_ovr_diff_4g",
+    "target_madden_te_ovr",
+    "opp_madden_edge_right_ovr_diff_prev",
+    "target_madden_backfield_ovr_diff_prev",
+    "opp_madden_cornerback_ovr_diff_prev",
+    "target_madden_wr1_ovr",
+    "target_madden_edge_ovr_diff_prev_season",
+    "opp_madden_safety_ovr_diff_4g",
+    "opp_madden_linebacker_ovr_diff_prev"
+  ],
+  "n_madden": 74,
+  "metrics": {
+    "auroc": 0.6969209558823528,
+    "accuracy": 0.6314338235294118,
+    "brier": 0.22114585995276892,
+    "logloss": 0.6324538304287861,
+    "per_week_auroc_mean": 0.6979402251069287,
+    "width_stratified_brier": {
+      "narrowest": 0.18179452540574542,
+      "q2": 0.2214784492955278,
+      "q3": 0.23631115858126903,
+      "widest": 0.24499930652853344
+    },
+    "reliability_curve": {
+      "prob_true": [
+        0.21100917431192662,
+        0.25688073394495414,
+        0.44036697247706424,
+        0.4074074074074074,
+        0.5229357798165137,
+        0.5137614678899083,
+        0.5277777777777778,
+        0.6513761467889908,
+        0.6880733944954128,
+        0.7798165137614679
+      ],
+      "prob_pred": [
+        0.25756150956074975,
+        0.34797695762046976,
+        0.403962614434524,
+        0.4457235686997712,
+        0.4856818063037736,
+        0.5194491108790259,
+        0.5576380953227587,
+        0.599090040481272,
+        0.6520122991684302,
+        0.7407480089357467
+      ]
+    }
+  },
+  "champion_deltas": {
+    "bart_run6_auroc_delta": -0.0081,
+    "bart_run6_brier_delta": 0.0017,
+    "bart_run10_auroc_delta": -0.0111,
+    "bart_run10_brier_delta": 0.0026
+  },
+  "validation_curve": [
+    {
+      "n": 278,
+      "val_brier": 0.227
+    },
+    {
+      "n": 223,
+      "val_brier": 0.2272
+    },
+    {
+      "n": 179,
+      "val_brier": 0.2266
+    },
+    {
+      "n": 144,
+      "val_brier": 0.2267
+    },
+    {
+      "n": 116,
+      "val_brier": 0.227
+    },
+    {
+      "n": 93,
+      "val_brier": 0.2268
+    },
+    {
+      "n": 75,
+      "val_brier": 0.2272
+    },
+    {
+      "n": 60,
+      "val_brier": 0.2268
+    },
+    {
+      "n": 48,
+      "val_brier": 0.2273
+    },
+    {
+      "n": 39,
+      "val_brier": 0.2281
+    },
+    {
+      "n": 32,
+      "val_brier": 0.2281
+    },
+    {
+      "n": 26,
+      "val_brier": 0.2285
+    },
+    {
+      "n": 21,
+      "val_brier": 0.2294
+    },
+    {
+      "n": 17,
+      "val_brier": 0.2295
+    },
+    {
+      "n": 14,
+      "val_brier": 0.2292
+    },
+    {
+      "n": 12,
+      "val_brier": 0.2292
+    },
+    {
+      "n": 10,
+      "val_brier": 0.2313
+    }
+  ]
+}

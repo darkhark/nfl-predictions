@@ -193,6 +193,7 @@ metrics are tracked:
 | 27 | 2026-06-20 | **Bayesian logistic regression** (PyMC, weakly-informative `Normal(0,1)` prior), same 54 features / split as run 6 | 54 | 0.695 | 0.657 | 0.2208 |
 | 28 | 2026-06-24 | **Madden launch ratings through RFE** — rank-only pool + 188 `madden_*` (incl. 2025 launch data from Phase 0) as RFE candidates for the first time; brier-1SE, XGBoost | 51 | 0.699 | 0.637 | 0.2211 |
 | 29 | 2026-06-24 | **Madden launch ratings, lean ablation-informed pool** — Madden LEVELS only + `schedule_points` + `pbp_phase2_directional` + context (1,954-col pool); brier-1SE, XGBoost | 25 | 0.700 | 0.642 | 0.2209 |
+| 30 | 2026-06-24 | **BART with the full Madden family** — backward-elimination from champion-start (90) + all 188 `madden_*`; brier-1SE, BART | 144 | 0.697 | 0.631 | 0.2211 |
 
 **What changed between runs**
 
@@ -602,6 +603,36 @@ metrics are tracked:
     beats the champion. Reproduce Run 29 with `--stage rfe --tag _run29 --madden-levels-only
     --families madden_ratings,schedule_points,pbp_phase2_directional,context_rest` then
     `--stage grid --best-num-feats 25 --tag _run29`.
+- **Run 30 (BART with the full Madden family — Phase 2, 2026-06-24, `bart-launch-ratings`):**
+  the **first time Madden goes through BART** (the project's champion estimator). BART
+  backward-elimination (`BartBackwardElimination`, selection-grade m=50/draws=500/2-chain fits,
+  6 replicates, brier-1SE) ran from the BART champion's start lineage (the XGBoost-RFE top-90,
+  Run-10's start) **+ all 188 `madden_*` columns** (278 candidates), then a final 4-chain BART
+  (draws=1000) on the seed-32 / 2024+2025 hold-out. NaN → the `-100` BART sentinel; eval reuses
+  the Run-27 `bayes_logistic.evaluate` suite (with the posterior-width-stratified Brier).
+  - **Madden survives BART selection *heavily* — 74 of 188 in the 144-feature set (51%)** — far
+    more than XGBoost kept (13/51 in Run 28, 16/25 in Run 29), and crucially **including many of
+    the `_ovr_diff_*` momentum columns the ablation flagged as redundant.** BART's smooth additive
+    structure splits differently than XGBoost's axis-aligned trees and finds use for features the
+    tree-importance ablation discarded.
+  - **But it is the *weakest* of the Madden runs: ROC-AUC 0.697 / accuracy 0.631 / Brier 0.2211**
+    — ~1.1 AUROC points **below** the BART champion (Run 10, 0.708 / 0.2185; Run 6, 0.705), and
+    below both XGBoost Madden runs (0.699 / 0.700). The selection over-committed: the validation
+    Brier was **flat (~0.2266 at 179 feats down to ~0.227 at 48)**, the 6-replicate SE at the peak
+    was tiny, so brier-1SE landed at **144 features** — and that large, Madden-diff-heavy set
+    **did not generalize** (0.697 hold-out). This *reinforces* the ablation: the momentum diffs
+    BART selected are noise, and including them **hurt** vs the lean champion.
+  - **The one BART win:** the **posterior-width-stratified Brier is cleanly monotone**
+    (narrowest 0.182 → q2 0.221 → q3 0.236 → widest 0.245) — narrower posteriors are more
+    accurate, so the per-row uncertainty is trustworthy even though the point predictions aren't
+    best (the same Bayesian payoff seen in Run 27).
+  - **Phase-2 verdict (honest):** across **both** estimators now — XGBoost (Runs 28–29, ~0.700)
+    and BART (Run 30, 0.697) — **Madden launch ratings survive selection but do not beat the
+    champion.** Consistent with the family-pairing ablation: Madden is *sub-additive*, substituting
+    for the existing team-quality signal rather than adding to it. Reproduce with
+    `python -m scripts.experiments.bart_launch_ratings --stage rfe` then `--stage final`; artifacts
+    in `data/predict_games/bart_launch_ratings/`. (The family-pairing analysis the brief scoped for
+    Phase 2 was completed in Phase 1 — see the Madden sub-structure ablations above.)
 
 ## Feature-group ablation: are the feature families complementary or redundant?
 
