@@ -73,7 +73,8 @@ def build_results(metrics, selected_features, history, best_num_feats):
         'metrics': metrics,
         'champion_deltas': deltas,
         'validation_curve': [{'n': int(r['num_features']),
-                              'val_brier': float(r['validation_score'])}
+                              'val_brier': (None if pd.isna(r['validation_score'])
+                                            else float(r['validation_score']))}
                              for _, r in history.iterrows()],
     }
 
