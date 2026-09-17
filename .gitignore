@@ -117,3 +117,6 @@ data/predict_games/input_data/schedule_and_weekly.parquet
 
 # Bayesian-logistic full posterior traces (hundreds of MB, regenerable via the script)
 data/predict_games/bayes_logistic/*.nc
+
+# Claude Code local settings and worktrees
+.claude/
