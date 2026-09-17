@@ -19,11 +19,23 @@ calibration, and drift-aware design) to football analytics.
 - **Approach:** engineer prior-week team form features, select a compact feature set with
   a custom RFE routine, tune an XGBoost classifier, and calibrate the output probabilities.
 
-> **Status:** the data pipeline, feature engineering, feature selection, tuning, and
-> calibration utilities are complete and tested. Predictive performance on game outcomes
-> is still being improved — NFL game prediction is a hard problem and the current model
-> does not yet consistently beat a strong baseline. The pipeline and methodology are the
-> finished, reusable part; model accuracy is an ongoing line of work (see [Roadmap](#roadmap)).
+> **Status (September 2026):** the data pipeline, feature engineering, two
+> estimator-specific feature-selection engines, calibration, and the evaluation suite are
+> complete and tested, and the project has 30 logged experiments across eight feature
+> families and three estimators (XGBoost, Bayesian BART, Bayesian logistic regression).
+> The champion is run 10's probit BART on 57 features, 22 of them directional
+> play-by-play splits: pooled ROC-AUC ~0.705–0.708 and Brier ~0.219 on the 544-game
+> 2024–2025 out-of-time hold-out, against 0.2495 Brier for always predicting the home-win
+> rate. Its posterior uncertainty is informative: picks made at 70%+ confidence won 81%
+> (94 games), and the narrowest-posterior quartile of games is ~77% correct versus ~59%
+> for the widest (these secondary figures move by several games between BART executions,
+> so treat them as approximate). No market-implied baseline has been measured yet; beating
+> one is the roadmap's target. The
+> [feature-group ablation](#feature-group-ablation-are-the-feature-families-complementary-or-redundant)
+> showed the seven original in-dataset families are mutually redundant, and Madden ratings,
+> the eighth, tested complementary but did not beat the champion (runs 28 to 30), so the
+> remaining levers are the two untapped sources, market odds and Next Gen Stats at the
+> weekly grain (see [Roadmap](#roadmap)).
 
 ## Data sources
 
